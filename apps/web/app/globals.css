@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* TV1 – Bộ màu & kiểu chữ chung của BrewLite (mọi trang dùng chung các tên màu này) */
+@theme {
+  --color-leaf: #2f6b4f;       /* màu chính: nút, liên kết, trạng thái thành công */
+  --color-leaf-dark: #22503b;  /* nút khi rê chuột */
+  --color-leaf-soft: #e4eee5;  /* nền ô đang được chọn */
+  --color-espresso: #2b2420;   /* chữ chính */
+  --color-muted: #5d6f70;      /* chữ phụ (xám xanh) */
+  --color-steam: #e7f6f6;      /* nền trang: xanh cyan nhạt */
+  --color-line: #cfe3e3;       /* viền, đường kẻ (xanh xám nhạt) */
+  --color-crema: #a86b12;      /* giá tiền */
+  --color-crema-soft: #f5e6cf; /* nền nhãn "đang chờ" */
+  --color-danger: #b42318;     /* lỗi */
+  --color-danger-soft: #fdecea;
+
+  /* Hiệu ứng dùng chung: rise = hiện dần từ dưới lên, pop = bật ra (dấu ✓), bump = nảy (số ly trong giỏ) */
+  --animate-rise: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-pop: pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
+  --animate-bump: bump 0.35s ease-out;
+  --animate-fill: fill 1.3s cubic-bezier(0.3, 0.6, 0.3, 1) 0.2s both; /* nước rót đầy ly (màn thành công) */
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.6); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes fill {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+  }
+  @keyframes bump {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.35); }
+    100% { transform: scale(1); }
+  }
+}
+
+@theme inline {
+  --font-sans: var(--font-be-vietnam), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Chỉ dùng giao diện sáng (bỏ chế độ tối mặc định của create-next-app – trước đây làm 2 bên trang bị đen) */
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-steam);
+  color: var(--color-espresso);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Viền xanh khi dùng bàn phím (Tab) để biết đang ở nút nào */
+:focus-visible {
+  outline: 2px solid var(--color-leaf);
+  outline-offset: 2px;
+}
+
+/* Người dùng bật "giảm chuyển động" thì tắt hiệu ứng */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
