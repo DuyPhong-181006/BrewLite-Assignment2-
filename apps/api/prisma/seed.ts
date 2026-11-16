@@ -3,6 +3,7 @@
  * Chạy: npx prisma db seed (docker compose và production tự chạy khi khởi động API).
  */
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -57,7 +58,17 @@ async function main() {
     await prisma.promotion.upsert({ where: { code: c.code }, update: {}, create: c });
   }
 
-  console.log(`Seed xong: ${products.length} sản phẩm, ${sizes.length} size, ${toppings.length} topping, ${coupons.length} mã giảm giá`);
+  // TV5 – An Tường: tài khoản demo (FR-06) – dùng cho demo và test E2E
+  const passwordHash = await bcrypt.hash('123456', 10);
+  await prisma.user.upsert({
+    where: { email: 'demo@brewlite.vn' },
+    update: {},
+    create: { email: 'demo@brewlite.vn', name: 'Khách demo', passwordHash },
+  });
+
+  console.log(
+    `Seed xong: ${products.length} sản phẩm, ${sizes.length} size, ${toppings.length} topping, ${coupons.length} mã giảm giá, 1 tài khoản demo`,
+  );
 }
 
 main()

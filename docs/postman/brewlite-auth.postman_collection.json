@@ -1,0 +1,621 @@
+{
+  "info": {
+    "name": "BrewLite – Tài khoản & Điểm thưởng (TV5 An Tường)",
+    "description": "Chạy backend (cổng 3001), CSDL đã seed, apps/api/.env có JWT_SECRET. Bấm Run collection để chạy lần lượt 1 → 14. Request 1 tự sinh email mới nên chạy lại bao nhiêu lần cũng được; request 6 đăng nhập và lưu token, các request sau tự gửi kèm token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Đăng ký tài khoản mới (email tự sinh)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"matkhau123\",\n  \"name\": \"Khách Postman\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"regEmail\", \"khach\" + Date.now() + \"@brewlite.vn\");"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 201\", () => pm.response.to.have.status(201));",
+              "const b = pm.response.json();",
+              "pm.test(\"Báo đăng ký thành công\", () => pm.expect(b.message).to.eql(\"Đăng ký thành công\"));",
+              "pm.test(\"Email được lưu chữ thường\", () => pm.expect(b.user.email).to.eql(pm.collectionVariables.get(\"regEmail\").toLowerCase()));",
+              "pm.test(\"KHÔNG trả mật khẩu / mật khẩu đã băm\", () => { pm.expect(b.user).to.not.have.property(\"password\"); pm.expect(b.user).to.not.have.property(\"passwordHash\"); });",
+              "pm.test(\"Điểm thưởng ban đầu = 0\", () => pm.expect(b.user.loyaltyPoints).to.eql(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Lỗi: đăng ký trùng email -> 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"matkhau123\",\n  \"name\": \"Khách Postman\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 409\", () => pm.response.to.have.status(409));",
+              "pm.test(\"Báo email đã đăng ký\", () => pm.expect(pm.response.json().message).to.eql(\"Email đã được đăng ký\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Lỗi: email sai định dạng -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"khong-phai-email\",\n  \"password\": \"matkhau123\",\n  \"name\": \"A\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Lỗi: mật khẩu ngắn hơn 8 ký tự -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"ngan@brewlite.vn\",\n  \"password\": \"123\",\n  \"name\": \"A\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Lỗi: gửi thừa trường (tự cho mình điểm thưởng) -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"thua@brewlite.vn\",\n  \"password\": \"matkhau123\",\n  \"name\": \"A\",\n  \"loyaltyPoints\": 9999\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Đăng nhập tài khoản vừa tạo (lấy token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"matkhau123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Đăng nhập thành công\", () => pm.expect([200, 201]).to.include(pm.response.code));",
+              "const b = pm.response.json();",
+              "pm.test(\"Có accessToken (JWT)\", () => pm.expect(b.accessToken).to.be.a(\"string\").and.match(/^[\\w-]+\\.[\\w-]+\\.[\\w-]+$/));",
+              "pm.test(\"tokenType = Bearer\", () => pm.expect(b.tokenType).to.eql(\"Bearer\"));",
+              "pm.test(\"Phản hồi dưới 500ms (đề Mục 4.2)\", () => pm.expect(pm.response.responseTime).to.be.below(500));",
+              "pm.collectionVariables.set(\"token\", b.accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Lỗi: sai mật khẩu -> 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{regEmail}}\",\n  \"password\": \"saimatkhau\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Không nói rõ sai email hay sai mật khẩu\", () => pm.expect(pm.response.json().message).to.eql(\"Email hoặc mật khẩu không đúng\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Lỗi: email chưa đăng ký -> 401 (cùng câu báo lỗi)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"chuaco@brewlite.vn\",\n  \"password\": \"matkhau123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Cùng câu báo lỗi với sai mật khẩu\", () => pm.expect(pm.response.json().message).to.eql(\"Email hoặc mật khẩu không đúng\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Thông tin của tôi (gửi kèm token)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "me"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 200\", () => pm.response.to.have.status(200));",
+              "const u = pm.response.json();",
+              "pm.test(\"Đúng tài khoản đang đăng nhập\", () => pm.expect(u.email).to.eql(pm.collectionVariables.get(\"regEmail\").toLowerCase()));",
+              "pm.test(\"KHÔNG trả mật khẩu đã băm\", () => pm.expect(u).to.not.have.property(\"passwordHash\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Lỗi: xem thông tin khi chưa đăng nhập -> 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "me"
+          ]
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Lỗi: token giả mạo -> 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "me"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "token-gia-mao",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Điểm thưởng của tôi",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/loyalty/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "loyalty",
+            "me"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Tài khoản mới có 0 điểm\", () => pm.expect(pm.response.json().loyaltyPoints).to.eql(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Lỗi: xem điểm khi chưa đăng nhập -> 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/loyalty/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "loyalty",
+            "me"
+          ]
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Đăng nhập tài khoản demo (demo@brewlite.vn / 123456)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"demo@brewlite.vn\",\n  \"password\": \"123456\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Đăng nhập thành công\", () => pm.expect([200, 201]).to.include(pm.response.code));",
+              "pm.test(\"Phản hồi dưới 500ms (đề Mục 4.2)\", () => pm.expect(pm.response.responseTime).to.be.below(500));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001"
+    },
+    {
+      "key": "regEmail",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ]
+}
