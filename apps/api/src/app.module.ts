@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { LoggingInterceptor } from './common/logging.interceptor';
 import { ProductsModule } from './products/products.module';
+import { PromotionsModule } from './promotions/promotions.module';
 
 // Module gốc: mỗi domain là 1 module riêng (xem docs/architecture/architecture.md)
 @Module({
@@ -13,6 +14,7 @@ import { ProductsModule } from './products/products.module';
     PrismaModule,
     HealthModule, // TV1 – GET /health
     ProductsModule, // TV3 – FR-01, FR-02
+    PromotionsModule, // TV2 – FR-11
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: LoggingInterceptor }],
 })

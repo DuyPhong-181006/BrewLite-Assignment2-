@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import ProductCard, { type Product } from '../components/ProductCard';
+import CartBadge from '../components/CartBadge';
 import IceBanner from '../components/IceBanner';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -85,6 +86,10 @@ export default function Home() {
         )}
       </main>
 
+      {/* Điện thoại: nút giỏ hàng cố định ở đáy (wireframe 1). Máy tính đã có nút Giỏ hàng trên thanh đầu trang */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white p-4 md:hidden">
+        <CartBadge />
+      </div>
     </>
   );
 }
