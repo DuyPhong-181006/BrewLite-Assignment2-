@@ -30,6 +30,12 @@ const toppings = [
   { code: 'EXTRA_SHOT', name: 'Thêm shot espresso', price: 10000 },
 ];
 
+// TV2 – Lê Hữu Nhân: mã giảm giá (FR-11)
+const coupons = [
+  { code: 'WELCOME10', description: 'Giảm 10% cho mọi đơn, tối đa 20.000đ', percentOff: 10, maxDiscount: 20000 },
+  { code: 'BREW20', description: 'Giảm 20% cho đơn từ 100.000đ, tối đa 50.000đ', percentOff: 20, maxDiscount: 50000, minSubtotal: 100000, maxUses: 100 },
+];
+
 async function main() {
   for (const p of products) {
     await prisma.product.upsert({
@@ -47,7 +53,11 @@ async function main() {
     await prisma.topping.upsert({ where: { code: t.code }, update: t, create: t });
   }
 
-  console.log(`Seed xong: ${products.length} sản phẩm, ${sizes.length} size, ${toppings.length} topping`);
+  for (const c of coupons) {
+    await prisma.promotion.upsert({ where: { code: c.code }, update: {}, create: c });
+  }
+
+  console.log(`Seed xong: ${products.length} sản phẩm, ${sizes.length} size, ${toppings.length} topping, ${coupons.length} mã giảm giá`);
 }
 
 main()
