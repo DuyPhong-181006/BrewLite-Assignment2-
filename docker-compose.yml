@@ -1,0 +1,58 @@
+# TV1 – Chạy cả hệ thống ở local: docker compose up -d --build
+#   Web:  http://localhost:3000
+#   API:  http://localhost:3001  (kiểm tra: http://localhost:3001/health)
+#   CSDL: localhost:5432 (chỉ để dev; production CSDL không mở ra ngoài)
+# Chỉ cần CSDL để chạy npm run dev: docker compose up -d db
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: brewlite
+      POSTGRES_PASSWORD: brewlite
+      POSTGRES_DB: brewlite
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brewlite -d brewlite"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./apps/api
+    environment:
+      DATABASE_URL: postgresql://brewlite:brewlite@db:5432/brewlite?schema=public
+      # Giá trị chỉ dùng ở local. Production đặt trong Render, không ghi vào repo
+      JWT_SECRET: local-dev-secret-doi-khi-deploy
+      PORT: 3001
+      FRONTEND_URL: http://localhost:3000,http://127.0.0.1:3000
+      MOCK_PAYMENT_DELAY_MS: 300
+      RUN_SEED: "true"
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        # Trình duyệt trên máy gọi API qua cổng 3001
+        NEXT_PUBLIC_API_URL: http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,93 @@
+# TV1 – Đào Duy Phong: Continuous Integration (Task 4.4)
+# Chạy khi mở/cập nhật Pull Request và khi merge vào main: Install -> Lint -> Unit Test -> Build.
+# Branch protection của main bắt buộc 2 job "api" và "web" phải xanh mới merge được.
+# CD (cd.yml) gọi lại workflow này làm quality gate trước khi deploy.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: brewlite
+          POSTGRES_PASSWORD: brewlite
+          POSTGRES_DB: brewlite_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U brewlite -d brewlite_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # CSDL tạm của CI, mất khi job kết thúc -> không phải secret
+      DATABASE_URL: postgresql://brewlite:brewlite@localhost:5432/brewlite_test?schema=public
+      JWT_SECRET: ci-only-not-a-real-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Install
+        run: |
+          npm install --no-audit --no-fund
+          npx prisma generate
+      - name: Lint
+        run: npm run lint
+      - name: Unit test
+        run: npm test
+      - name: Build
+        run: npm run build
+      # Integration test: chạy migration lên Postgres của CI rồi gọi API thật
+      - name: Migrate test database
+        run: npx prisma migrate deploy
+      - name: Integration test
+        run: npm run test:e2e
+
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Unit test
+        run: npm test
+      - name: Build
+        run: npm run build

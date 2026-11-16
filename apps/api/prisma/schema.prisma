@@ -1,0 +1,190 @@
+// BrewLite – mô hình dữ liệu, khớp class diagram docs/diagrams/class-domain.puml
+// Thay đổi schema = tạo migration mới (npx prisma migrate dev --name <ten>), không sửa migration cũ.
+// Xem ADR-002 (docs/architecture/adr/002-prisma-migrate.md).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── Enum ─────────────
+
+// TV3 – Phạm Tuấn (FR-08 – state machine)
+enum OrderStatus {
+  PENDING
+  PAID
+  PAYMENT_FAILED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+// TV3 – Phạm Tuấn (FR-02)
+enum Size {
+  S
+  M
+  L
+}
+
+// TV6 – Nguyễn Tấn Sự (FR-05)
+enum PaymentMethod {
+  WALLET
+  CARD
+}
+
+// TV6 – Nguyễn Tấn Sự (FR-05, FR-10)
+enum PaymentStatus {
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+// TV5 – An Tường (FR-12): EARN = cộng điểm khi đơn PAID, REDEEM = dùng điểm (để dành cho bản sau)
+enum LoyaltyType {
+  EARN
+  REDEEM
+}
+
+// ───────────── Sản phẩm & tùy chọn ─────────────
+
+// TV2 – Lê Hữu Nhân (FR-01: name, description, price, imageUrl)
+// TV3 – Phạm Tuấn (FR-09: stock, version)
+model Product {
+  id          Int         @id @default(autoincrement())
+  name        String      @unique
+  description String?
+  price       Int // VND
+  imageUrl    String
+  stock       Int         @default(100)
+  // Optimistic locking: mỗi lần trừ/trả kho tăng version lên 1
+  version     Int         @default(0)
+  createdAt   DateTime    @default(now())
+  orderItems  OrderItem[]
+  sizes       SizeOption[]
+  toppings    Topping[]
+}
+
+// TV3 – Phạm Tuấn (FR-02): phụ thu theo size
+model SizeOption {
+  code       String @id // 'S' | 'M' | 'L' – khớp enum Size
+  label      String
+  extraPrice Int    @default(0)
+  sortOrder  Int    @default(0)
+  products   Product[]
+}
+
+// TV3 – Phạm Tuấn (FR-02): danh mục topping
+model Topping {
+  code   String  @id
+  name   String
+  price  Int
+  active Boolean @default(true)
+  products   Product[]
+}
+
+// ───────────── Tài khoản ─────────────
+
+// TV5 – An Tường (FR-06: email, passwordHash, name; FR-12: loyaltyPoints)
+model User {
+  id            Int      @id @default(autoincrement())
+  email         String   @unique
+  passwordHash  String
+  name          String?
+  loyaltyPoints Int      @default(0)
+  createdAt     DateTime @default(now())
+  orders        Order[]
+  loyalty       LoyaltyTransaction[]
+}
+
+// ───────────── Đơn hàng ─────────────
+
+// TV4 – Phạm Thành Danh (FR-04)
+// status: TV3 · couponCode/discount: TV2 · pointsEarned: TV5
+model Order {
+  id           Int         @id @default(autoincrement())
+  userId       Int
+  user         User        @relation(fields: [userId], references: [id])
+  status       OrderStatus @default(PENDING)
+  subtotal     Int
+  discount     Int         @default(0)
+  total        Int
+  couponCode   String?
+  pointsEarned Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  items        OrderItem[]
+  payments     Payment[]
+  loyalty      LoyaltyTransaction[]
+
+  @@index([userId, createdAt])
+}
+
+// TV4 – Phạm Thành Danh (FR-04). Lưu "ảnh chụp" tên, size, topping, giá lúc đặt.
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  productName String
+  size        Size
+  toppings    String[] // mã topping (Topping.code)
+  qty         Int
+  unitPrice   Int
+  lineTotal   Int
+}
+
+// ───────────── Thanh toán & khuyến mãi ─────────────
+
+// TV6 – Nguyễn Tấn Sự (FR-05, FR-10)
+model Payment {
+  id             Int           @id @default(autoincrement())
+  orderId        Int
+  order          Order         @relation(fields: [orderId], references: [id])
+  // Idempotency: unique => cùng 1 key không thể tạo 2 giao dịch
+  idempotencyKey String        @unique
+  amount         Int
+  method         PaymentMethod
+  status         PaymentStatus @default(PROCESSING)
+  providerRef    String?
+  failureReason  String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+// TV2 – Lê Hữu Nhân (FR-11 – mã giảm giá). Đơn lưu mã đã dùng ở Order.couponCode
+model Promotion {
+  code        String    @id
+  description String?
+  percentOff  Int
+  maxDiscount Int?
+  minSubtotal Int       @default(0)
+  maxUses     Int?
+  usedCount   Int       @default(0)
+  expiresAt   DateTime?
+  active      Boolean   @default(true)
+}
+
+// ───────────── Điểm thưởng ─────────────
+
+// TV5 – An Tường (FR-12): mỗi lần cộng/trừ điểm ghi 1 dòng để tra lại lịch sử.
+// User.loyaltyPoints là tổng hiện tại; bảng này là sổ chi tiết.
+model LoyaltyTransaction {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId   Int?
+  order     Order?      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type      LoyaltyType
+  points    Int // EARN: số dương, REDEEM: số âm
+  createdAt DateTime    @default(now())
+
+  // Một đơn chỉ được cộng điểm 1 lần
+  @@unique([orderId, type])
+  @@index([userId, createdAt])
+}

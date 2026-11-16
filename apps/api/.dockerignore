@@ -1,0 +1,4 @@
+# Không copy thư viện đã cài trên Windows vào container (sai hệ điều hành)
+node_modules
+dist
+.env
