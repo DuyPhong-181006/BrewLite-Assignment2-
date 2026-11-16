@@ -1,0 +1,160 @@
+@startuml class-domain
+' Class diagram mức domain (Task 2.3) – TV5 An Tường
+' Khớp mô hình dữ liệu apps/api/prisma/schema.prisma (Promotion = mã giảm giá)
+skinparam shadowing false
+skinparam defaultFontName "Arial"
+skinparam classBackgroundColor #FFFFFF
+skinparam classBorderColor #2F6B4F
+skinparam classHeaderBackgroundColor #E4EEE5
+skinparam ArrowColor #2F6B4F
+skinparam linetype ortho
+hide empty members
+
+enum OrderStatus <<enum>> {
+  PENDING
+  PAID
+  PAYMENT_FAILED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+enum Size <<enum>> {
+  S
+  M
+  L
+}
+enum PaymentMethod <<enum>> {
+  WALLET
+  CARD
+}
+enum PaymentStatus <<enum>> {
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+enum LoyaltyType <<enum>> {
+  EARN
+  REDEEM
+}
+
+class User {
+  +id: Int
+  +email: String {unique}
+  -passwordHash: String
+  +name: String
+  +loyaltyPoints: Int = 0
+  +createdAt: DateTime
+}
+
+class Product {
+  +id: Int
+  +name: String {unique}
+  +description: String
+  +price: Int <<VND>>
+  +imageUrl: String
+  +stock: Int = 100
+  +version: Int = 0
+  --
+  +holdStock(qty, version): void
+  +releaseStock(qty): void
+}
+
+class SizeOption {
+  +code: Size
+  +label: String
+  +extraPrice: Int
+}
+
+class Topping {
+  +code: String
+  +name: String
+  +price: Int
+  +active: Boolean
+}
+
+class Order {
+  +id: Int
+  +status: OrderStatus = PENDING
+  +subtotal: Int
+  +discount: Int = 0
+  +total: Int
+  +couponCode: String [0..1]
+  +pointsEarned: Int = 0
+  +createdAt: DateTime
+  --
+  +canTransition(to: OrderStatus): Boolean
+  +cancel(): void
+}
+
+class OrderItem {
+  +id: Int
+  +productName: String
+  +size: Size
+  +toppings: String[*]
+  +qty: Int {1..20}
+  +unitPrice: Int
+  +lineTotal: Int
+}
+
+class Payment {
+  +id: Int
+  +idempotencyKey: String {unique}
+  +amount: Int
+  +method: PaymentMethod
+  +status: PaymentStatus = PROCESSING
+  +providerRef: String [0..1]
+  +failureReason: String [0..1]
+  +createdAt: DateTime
+}
+
+class Promotion {
+  +code: String {id}
+  +description: String
+  +percentOff: Int
+  +maxDiscount: Int [0..1]
+  +minSubtotal: Int = 0
+  +maxUses: Int [0..1]
+  +usedCount: Int = 0
+  +expiresAt: DateTime [0..1]
+  +active: Boolean
+  --
+  +discountFor(subtotal: Int): Int
+}
+
+class LoyaltyTransaction {
+  +id: Int
+  +type: LoyaltyType
+  +points: Int
+  +createdAt: DateTime
+}
+
+User "1" -- "0..*" Order : đặt >
+Order "1" *-- "1..*" OrderItem : gồm >
+OrderItem "0..*" --> "1" Product : tham chiếu >
+Order "1" -- "0..*" Payment : được trả qua >
+Order "0..*" --> "0..1" Promotion : áp mã >
+User "1" -- "0..*" LoyaltyTransaction : có >
+Order "0..1" -- "0..*" LoyaltyTransaction : sinh ra >
+Product "0..*" -- "0..*" SizeOption : cho phép >
+Product "0..*" -- "0..*" Topping : cho phép >
+
+Order ..> OrderStatus
+OrderItem ..> Size
+Payment ..> PaymentMethod
+Payment ..> PaymentStatus
+LoyaltyTransaction ..> LoyaltyType
+
+note bottom of Payment
+  idempotencyKey duy nhất:
+  gửi lại cùng key -> cùng 1 giao dịch (FR-10)
+end note
+note bottom of LoyaltyTransaction
+  Mỗi đơn tối đa 1 dòng EARN
+  (unique orderId + type, FR-12)
+end note
+note top of Product
+  version: optimistic locking
+  khi trừ kho (FR-09, ADR-003)
+end note
+@enduml
