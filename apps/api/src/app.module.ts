@@ -4,6 +4,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { LoggingInterceptor } from './common/logging.interceptor';
+import { ProductsModule } from './products/products.module';
 
 // Module gốc: mỗi domain là 1 module riêng (xem docs/architecture/architecture.md)
 @Module({
@@ -11,6 +12,7 @@ import { LoggingInterceptor } from './common/logging.interceptor';
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     HealthModule, // TV1 – GET /health
+    ProductsModule, // TV3 – FR-01, FR-02
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: LoggingInterceptor }],
 })
