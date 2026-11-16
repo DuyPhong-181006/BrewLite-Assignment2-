@@ -1,0 +1,91 @@
+@startuml sequence-checkout
+' Sequence diagram UC-01 Đặt và thanh toán đơn hàng (Task 2.2) – TV6 Nguyễn Tấn Sự
+' Khớp code: apps/api/src/orders/orders.service.ts, apps/api/src/payments/payments.service.ts
+skinparam shadowing false
+skinparam defaultFontName "Arial"
+skinparam sequenceMessageAlign left
+skinparam ParticipantBorderColor #2F6B4F
+skinparam ParticipantBackgroundColor #FFFFFF
+skinparam ActorBorderColor #2F6B4F
+skinparam DatabaseBorderColor #2F6B4F
+skinparam SequenceLifeLineBorderColor #8AA9A0
+skinparam ArrowColor #2F6B4F
+skinparam SequenceGroupBorderColor #A86B12
+skinparam SequenceGroupHeaderFontColor #A86B12
+autonumber "<b>0."
+
+actor "Customer" as C
+participant "Next.js UI\n(apps/web)" as UI
+participant "NestJS API\n(apps/api)" as API
+database "Database\n(PostgreSQL)" as DB
+participant "Payment Service\n(MockPaymentGateway)" as PAY
+
+C -> UI : Bấm "Xác nhận trả"\n(phương thức Ví/Thẻ, mã giảm giá nếu có)
+note over UI : Giỏ hàng lấy từ trình duyệt.\nTạo Idempotency-Key cho lượt trả này\n(giữ nguyên nếu phải gửi lại)
+
+== Bước 1: tạo đơn (FR-04, FR-09) ==
+UI -> API : POST /orders\nAuthorization: Bearer <JWT>\n{ items[productId, size, toppings, qty], couponCode? }
+API -> API : JwtAuthGuard kiểm tra chữ ký và hạn JWT
+alt JWT thiếu / sai / hết hạn
+  API --> UI : 401 Unauthorized
+  UI --> C : Chuyển sang trang Đăng nhập (giỏ vẫn còn)
+else JWT hợp lệ
+  API -> API : ValidationPipe kiểm tra DTO\n(size ∈ S/M/L, 1 ≤ qty ≤ 20, không có trường lạ)
+  alt dữ liệu không hợp lệ
+    API --> UI : 400 Bad Request (danh sách lỗi)
+  else hợp lệ
+    API -> DB : SELECT products, size options, toppings
+    DB --> API : giá gốc, phụ thu size, giá topping
+    API -> API : Tính lại đơn giá, subtotal;\nvalidateCoupon() nếu có mã -> discount
+    group transaction (prisma.$transaction)
+      loop mỗi món
+        API -> DB : UPDATE product SET stock = stock - qty, version = version + 1\nWHERE id = ? AND version = ? AND stock >= qty
+        DB --> API : số dòng cập nhật
+      end
+      alt có món không đủ hàng / bị người khác chốt trước
+        API -> DB : ROLLBACK
+        API --> UI : 400 "… chỉ còn n ly"
+        UI --> C : Báo hết hàng, không tạo đơn
+      else đủ hàng
+        API -> DB : INSERT order (PENDING, subtotal, discount, total) + order items
+        API -> DB : COMMIT
+        API --> UI : 201 { id, status: PENDING, total }
+      end
+    end
+  end
+end
+
+== Bước 2: thanh toán (FR-05, FR-10) ==
+UI -> API : POST /payments\nAuthorization: Bearer <JWT>\nIdempotency-Key: <key>\n{ orderId, method: WALLET | CARD }
+API -> API : Kiểm tra JWT, có Idempotency-Key, validate DTO
+API -> DB : SELECT order WHERE id = orderId
+DB --> API : order (userId, status, total)
+API -> DB : SELECT payment WHERE idempotencyKey = <key>
+DB --> API : giao dịch cũ hoặc null
+alt key đã dùng (khách bấm 2 lần / gửi lại do mất mạng)
+  API --> UI : 201 trả lại đúng giao dịch cũ\n(không gọi cổng thanh toán lần nữa)
+else key mới
+  API -> DB : INSERT payment (PROCESSING, amount = order.total)\nidempotencyKey UNIQUE
+  note right of DB : 2 request cùng key tới cùng lúc:\nrequest sau vi phạm UNIQUE (P2002)\n-> API trả lại giao dịch của request trước
+  API -> PAY : processPayment(order.total, method)
+  PAY --> API : kết quả { success, transactionId | reason }
+  alt thanh toán thành công
+    group transaction
+      API -> DB : UPDATE order SET status = PAID\nWHERE id = ? AND status = PENDING
+      API -> DB : UPDATE payment SET status = SUCCESS, providerRef
+    end
+    API -> DB : Ghi lượt dùng mã giảm giá (FR-11)
+    API -> DB : Cộng điểm + INSERT LoyaltyTransaction EARN (FR-12)
+    API --> UI : 201 { status: SUCCESS }
+    UI -> UI : Xóa giỏ hàng
+    UI --> C : Màn xác nhận "Đặt hàng thành công",\ntiến trình "Đã trả tiền" (FR-07)
+  else thanh toán thất bại
+    group transaction
+      API -> DB : UPDATE payment SET status = FAILED, failureReason
+      API -> DB : UPDATE order SET status = PAYMENT_FAILED\nWHERE id = ? AND status = PENDING
+    end
+    API --> UI : 201 { status: FAILED, failureReason }
+    UI --> C : "Thanh toán thất bại", giữ giỏ hàng,\ncho thử lại (key mới) hoặc hủy đơn
+  end
+end
+@enduml
