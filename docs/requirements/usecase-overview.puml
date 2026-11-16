@@ -1,0 +1,46 @@
+@startuml usecase-overview
+' Sơ đồ use-case tổng quát BrewLite (Task 1.2) – TV2 Lê Hữu Nhân
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName "Arial"
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #2F6B4F
+  ArrowColor #2F6B4F
+}
+skinparam actorBorderColor #2F6B4F
+skinparam rectangleBorderColor #2F6B4F
+
+actor "Khách vãng lai" as GUEST
+actor "Khách hàng\n(đã đăng nhập)" as CUS
+actor "Nhân viên quầy" as STAFF
+actor "Cổng thanh toán\n(giả lập)" as PAY <<hệ thống ngoài>>
+
+GUEST <|-- CUS
+
+rectangle "BrewLite" {
+  usecase "US-01 Xem menu\n(FR-01)" as UC_MENU
+  usecase "US-02 Xem chi tiết,\nchọn size, topping\n(FR-02)" as UC_DETAIL
+  usecase "US-03 Quản lý giỏ hàng\n(FR-03)" as UC_CART
+  usecase "US-04 Đăng ký /\nĐăng nhập (FR-06)" as UC_AUTH
+  usecase "UC-01 Đặt và thanh toán\nđơn hàng\n(FR-04, FR-05, FR-09, FR-10)" as UC01
+  usecase "US-09 Áp mã giảm giá\n(FR-11)" as UC_COUPON
+  usecase "US-07 Xem xác nhận\nvà lịch sử đơn (FR-07)" as UC_HISTORY
+  usecase "US-08 Hủy đơn chưa\nthanh toán (FR-08)" as UC_CANCEL
+  usecase "US-10 Tích điểm thưởng\n(FR-12)" as UC_POINTS
+  usecase "US-11 Cập nhật trạng thái\npha chế (FR-13, Could)" as UC_STAFF
+}
+
+GUEST --> UC_MENU
+GUEST --> UC_DETAIL
+GUEST --> UC_CART
+GUEST --> UC_AUTH
+CUS --> UC01
+CUS --> UC_HISTORY
+CUS --> UC_CANCEL
+UC01 ..> UC_AUTH : <<include>>
+UC_COUPON ..> UC01 : <<extend>>
+UC01 ..> UC_POINTS : <<include>>\n(khi PAID)
+UC01 -- PAY
+STAFF --> UC_STAFF
+@enduml
