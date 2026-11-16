@@ -1,0 +1,94 @@
+@startuml activity-end-to-end
+' Activity diagram luồng end-to-end BrewLite (Task 2.1) – TV4 Phạm Thành Danh
+' Khớp UC-01 (docs/requirements/uc-01-dat-va-thanh-toan.md) và SRS FR-01 → FR-12
+skinparam shadowing false
+skinparam defaultFontName "Arial"
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #2F6B4F
+skinparam ActivityDiamondBorderColor #A86B12
+skinparam ArrowColor #2F6B4F
+skinparam SwimlaneBorderColor #CFE3E3
+skinparam SwimlaneTitleFontStyle bold
+
+|Khách hàng|
+start
+:Mở BrewLite trên điện thoại;
+|Next.js UI|
+:Gọi GET /products;
+|NestJS API|
+:Đọc danh sách món từ CSDL;
+|Next.js UI|
+if (Tải menu được?) then (lỗi)
+  :Báo "Không tải được menu"\nvà nút "Thử lại";
+  |Khách hàng|
+  :Bấm "Thử lại";
+  |Next.js UI|
+  :Gọi lại GET /products;
+else (được)
+endif
+:Hiển thị menu (FR-01);
+|Khách hàng|
+:Chọn món, size, topping,\nsố lượng (FR-02);
+|Next.js UI|
+:Thêm vào giỏ, tính tổng tiền\n(lưu trên trình duyệt, FR-03);
+|Khách hàng|
+:Bấm "Thanh toán" trong giỏ;
+|Next.js UI|
+if (Đã đăng nhập?) then (chưa)
+  :Chuyển sang trang Đăng nhập\n(giỏ hàng vẫn giữ nguyên);
+  |Khách hàng|
+  :Nhập email, mật khẩu;
+  |NestJS API|
+  :Kiểm tra mật khẩu (bcrypt),\ncấp JWT (FR-06);
+  |Next.js UI|
+  :Lưu token, quay lại bước thanh toán;
+else (rồi)
+endif
+|Khách hàng|
+:Chọn Ví / Thẻ, nhập mã giảm giá (nếu có);
+:Bấm "Xác nhận trả";
+|Next.js UI|
+:POST /orders kèm JWT;
+|NestJS API|
+:Kiểm tra JWT, validate dữ liệu;
+:Tính lại giá từ CSDL;
+if (Đủ tồn kho cho mọi món?) then (không – hết hàng)
+  :Hủy transaction, không tạo đơn\n(400 "… chỉ còn n ly");
+  |Next.js UI|
+  :Báo hết hàng, mời giảm số lượng\nhoặc chọn món khác;
+  |Khách hàng|
+  stop
+else (đủ)
+  |NestJS API|
+  :Trong 1 transaction: tạo đơn PENDING\nvà trừ tồn kho (FR-04, FR-09);
+endif
+|Next.js UI|
+:POST /payments kèm Idempotency-Key (FR-10);
+|NestJS API|
+:Gửi yêu cầu tới cổng thanh toán giả lập;
+if (Cổng thanh toán trả về?) then (thành công)
+  :Đơn PAID, giao dịch SUCCESS;
+  :Cộng điểm thưởng (FR-12);
+  |Next.js UI|
+  :Xóa giỏ, mở màn Xác nhận đơn (FR-07);
+  |Khách hàng|
+  :Thấy "Đặt hàng thành công"\nvà tiến trình đơn;
+  stop
+else (thất bại)
+  |NestJS API|
+  :Đơn PAYMENT_FAILED, giao dịch FAILED;
+  |Next.js UI|
+  :Báo thanh toán thất bại;
+  |Khách hàng|
+  if (Thử lại?) then (có)
+    :Bấm "Xác nhận trả" lại\n(đơn quay về PENDING, key mới);
+    note right: Quay lại bước POST /payments
+    detach
+  else (không – hủy đơn)
+    |NestJS API|
+    :PATCH /orders/:id/cancel:\nđơn CANCELLED, trả lại tồn kho (FR-08);
+    |Khách hàng|
+    stop
+  endif
+endif
+@enduml
