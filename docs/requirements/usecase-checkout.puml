@@ -1,0 +1,37 @@
+@startuml usecase-checkout
+' UC-01 Đặt và thanh toán đơn hàng – phạm vi chi tiết (Task 1.3) – TV4 Phạm Thành Danh
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName "Arial"
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #2F6B4F
+  ArrowColor #2F6B4F
+}
+skinparam actorBorderColor #2F6B4F
+skinparam rectangleBorderColor #2F6B4F
+
+actor "Khách hàng" as KH
+actor "Cổng thanh toán\n(giả lập)" as PAY <<hệ thống ngoài>>
+
+rectangle "BrewLite – Đặt và thanh toán" {
+  usecase "UC-01\nĐặt và thanh toán\nđơn hàng" as UC01
+  usecase "Đăng nhập\n(FR-06)" as LOGIN
+  usecase "Tạo đơn và\ntrừ tồn kho\n(FR-04, FR-09)" as ORDER
+  usecase "Thanh toán bằng\nVí điện tử / Thẻ\n(FR-05, FR-10)" as PAYUC
+  usecase "Áp mã giảm giá\n(FR-11)" as COUPON
+  usecase "Thử lại thanh toán\nsau khi lỗi" as RETRY
+  usecase "Xem xác nhận đơn\n(FR-07)" as CONFIRM
+  usecase "Cộng điểm thưởng\n(FR-12)" as POINTS
+}
+
+KH --> UC01
+UC01 ..> LOGIN : <<include>>
+UC01 ..> ORDER : <<include>>
+UC01 ..> PAYUC : <<include>>
+UC01 ..> CONFIRM : <<include>>
+COUPON ..> UC01 : <<extend>>\n(khách nhập mã)
+RETRY ..> PAYUC : <<extend>>\n(thanh toán lỗi)
+PAYUC ..> POINTS : <<include>>\n(khi PAID)
+PAYUC -- PAY
+@enduml
