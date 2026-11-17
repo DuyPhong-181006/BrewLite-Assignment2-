@@ -11,7 +11,7 @@ Nhóm mô tả kiến trúc theo **mô hình C4** ở 2 mức đầu (Context, C
 
 ```
  [Khách hàng] --(HTTPS, điện thoại/laptop)--> [ BrewLite ] --(gọi nội bộ)--> [Cổng thanh toán giả lập]
- [Nhân viên quầy] ---------------------------> [ BrewLite ]   (FR-13, bản sau)
+ [Nhân viên quầy] --(HTTPS, máy tính bảng ở quầy, mã nhân viên)--> [ BrewLite ]   (FR-13)
  [Nhóm phát triển] --(git push, PR)--> [GitHub: CI/CD] --(deploy)--> [ BrewLite production ]
 ```
 
@@ -58,6 +58,7 @@ Prisma      (truy cập CSDL, transaction)  ──>  PostgreSQL
 | `loyalty` | Điểm thưởng | TV5 | `GET /loyalty/me` |
 | `orders` | Đơn hàng, máy trạng thái | TV4 (đơn), TV3 (state machine) | `POST /orders`, `GET /orders/me`, `GET /orders/:id`, `PATCH /orders/:id/cancel` |
 | `payments` | Thanh toán, idempotency | TV6 | `POST /payments` |
+| `staff` | Quầy pha chế (FR-13) | TV3 | `GET /staff/orders`, `PATCH /staff/orders/:id/status` (header `X-Staff-Key`) |
 | `prisma` | Kết nối CSDL dùng chung | TV1 | – |
 
 Module chỉ gọi nhau qua service được export (ví dụ `OrdersModule` import `InventoryModule`, `PromotionsModule`), không đọc thẳng bảng của domain khác ngoài transaction cần thiết.

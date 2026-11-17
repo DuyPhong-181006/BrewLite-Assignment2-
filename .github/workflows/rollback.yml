@@ -1,0 +1,61 @@
+# TV1 – Rollback thủ công: Actions -> Rollback -> Run workflow -> nhập commit SHA của bản tốt trước đó.
+# API: Render chạy lại image ghcr.io/<owner>/brewlite-api:<sha> (image cũ vẫn còn trên GHCR).
+# Web: Vercel đưa bản production trước đó lên lại.
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit SHA của bản API muốn quay về (xem tab Actions hoặc trang Packages)'
+        required: true
+      web:
+        description: 'Rollback cả web trên Vercel?'
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rollback-api:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      API_URL: ${{ vars.API_URL }}
+      SHA: ${{ inputs.sha }}
+    steps:
+      - name: Deploy lại image cũ
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/brewlite-api:$SHA"
+          img=$(jq -rn --arg v "$image" '$v|@uri')
+          curl -fsS -X POST "${HOOK}&imgURL=${img}" > /dev/null
+          echo "Đã yêu cầu Render chạy $image"
+      - name: Kiểm tra /health trả đúng phiên bản
+        run: |
+          for i in $(seq 1 40); do
+            v=$(curl -fsS --max-time 20 "$API_URL/health" | jq -r '.version // empty' || true)
+            if [ "$v" = "$SHA" ]; then echo "Đã quay về $SHA"; exit 0; fi
+            echo "Lần $i: đang chạy '$v', chờ 15s..."; sleep 15
+          done
+          exit 1
+
+  rollback-web:
+    if: ${{ inputs.web }}
+    runs-on: ubuntu-latest
+    environment: production-web
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Vercel rollback về bản production trước
+        run: npx --yes vercel@latest rollback --token="${{ secrets.VERCEL_TOKEN }}"

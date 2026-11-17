@@ -1,0 +1,144 @@
+# TV1 – Đào Duy Phong: Continuous Delivery/Deployment (Task 5.3)
+# Push/Tag -> Lint và Test -> Build -> Docker image (tag = commit SHA) -> Push GHCR -> Deploy -> Smoke test
+#
+# Cần cấu hình trước trong GitHub: Settings -> Secrets and variables -> Actions (xem docs/deployment.md)
+#   Secrets:   RENDER_DEPLOY_HOOK_URL, VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+#   Variables: API_URL (vd https://brewlite-api.onrender.com), WEB_URL (vd https://brewlite.vercel.app)
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+# Không cho 2 lần deploy chạy chồng lên nhau
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # 1. Quality gate: chạy lại đúng workflow CI (lint, unit test, build, integration test)
+  quality-gate:
+    uses: ./.github/workflows/ci.yml
+
+  # 2. Đóng gói API thành Docker image, tag bằng commit SHA, đẩy lên GitHub Container Registry
+  image:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tên image (GHCR yêu cầu chữ thường)
+        id: meta
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/brewlite-api" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build và push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          push: true
+          build-args: APP_VERSION=${{ github.sha }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # 3. Deploy API lên Render bằng image vừa đẩy -> smoke test -> lỗi thì tự quay về bản trước
+  deploy-api:
+    needs: image
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.API_URL }}/health
+    env:
+      API_URL: ${{ vars.API_URL }}
+      IMAGE: ${{ needs.image.outputs.image }}
+    steps:
+      - name: Ghi lại phiên bản đang chạy (để rollback)
+        id: prev
+        run: |
+          prev=$(curl -fsS --max-time 60 "$API_URL/health" | jq -r '.version // empty' || true)
+          echo "Phiên bản đang chạy: ${prev:-không rõ}"
+          echo "sha=$prev" >> "$GITHUB_OUTPUT"
+
+      - name: Gọi Render deploy hook với image mới
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          img=$(jq -rn --arg v "$IMAGE:${GITHUB_SHA}" '$v|@uri')
+          curl -fsS -X POST "${HOOK}&imgURL=${img}" > /dev/null
+          echo "Đã yêu cầu Render deploy $IMAGE:${GITHUB_SHA}"
+
+      # Migration chạy khi container khởi động (prisma migrate deploy, xem apps/api/Dockerfile).
+      # Smoke test: chờ /health trả status ok VÀ version = commit này (tối đa ~10 phút).
+      - name: Smoke test API
+        id: smoke
+        run: |
+          for i in $(seq 1 40); do
+            body=$(curl -fsS --max-time 20 "$API_URL/health" || true)
+            if [ "$(echo "$body" | jq -r '.status // empty' 2>/dev/null)" = "ok" ] && \
+               [ "$(echo "$body" | jq -r '.version // empty' 2>/dev/null)" = "$GITHUB_SHA" ]; then
+              echo "API khỏe: $body"
+              curl -fsS --max-time 20 "$API_URL/products" | jq 'length' | xargs echo "Số món trong menu:"
+              exit 0
+            fi
+            echo "Lần $i: chưa sẵn sàng, chờ 15s..."; sleep 15
+          done
+          echo "::error::Smoke test API thất bại sau 10 phút"
+          exit 1
+
+      - name: Tự rollback API về bản trước
+        if: failure() && steps.smoke.outcome == 'failure' && steps.prev.outputs.sha != '' && steps.prev.outputs.sha != 'dev'
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          PREV: ${{ steps.prev.outputs.sha }}
+        run: |
+          img=$(jq -rn --arg v "$IMAGE:$PREV" '$v|@uri')
+          curl -fsS -X POST "${HOOK}&imgURL=${img}" > /dev/null
+          echo "::warning::Đã yêu cầu Render quay về image $IMAGE:$PREV. Pipeline vẫn báo lỗi để nhóm kiểm tra."
+
+  # 4. Deploy web lên Vercel (chỉ chạy khi API đã khỏe) -> smoke test trang chủ
+  deploy-web:
+    needs: deploy-api
+    runs-on: ubuntu-latest
+    environment:
+      name: production-web
+      url: ${{ vars.WEB_URL }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Root Directory của project Vercel đặt là apps/web; NEXT_PUBLIC_API_URL đặt trong Vercel (Production)
+      - name: Lấy cấu hình project Vercel
+        run: npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build
+        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN" | tee deploy-url.txt
+      - name: Smoke test web
+        env:
+          WEB_URL: ${{ vars.WEB_URL }}
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS --max-time 20 "$WEB_URL" | grep -q "BrewLite"; then echo "Web OK: $WEB_URL"; exit 0; fi
+            echo "Lần $i: chưa thấy trang, chờ 10s..."; sleep 10
+          done
+          echo "::error::Smoke test web thất bại. Rollback: chạy workflow Rollback hoặc 'vercel rollback'"
+          exit 1
