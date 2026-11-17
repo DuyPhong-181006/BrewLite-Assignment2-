@@ -30,6 +30,7 @@ services:
       PORT: 3001
       FRONTEND_URL: http://localhost:3000,http://127.0.0.1:3000
       MOCK_PAYMENT_DELAY_MS: 300
+      STAFF_KEY: barista-demo-key
       RUN_SEED: "true"
     ports:
       - "3001:3001"
