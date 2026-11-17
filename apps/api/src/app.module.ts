@@ -9,6 +9,8 @@ import { PromotionsModule } from './promotions/promotions.module';
 import { AuthModule } from './auth/auth.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { OrdersModule } from './orders/orders.module';
+import { PaymentsModule } from './payments/payments.module';
+import { StaffModule } from './staff/staff.module';
 
 // Module gốc: mỗi domain là 1 module riêng (xem docs/architecture/architecture.md)
 @Module({
@@ -21,6 +23,8 @@ import { OrdersModule } from './orders/orders.module';
     AuthModule, // TV5 – FR-06
     LoyaltyModule, // TV5 – FR-12
     OrdersModule, // TV4 – FR-04, FR-07, FR-08
+    PaymentsModule, // TV6 – FR-05, FR-10
+    StaffModule, // TV3 – FR-13 quầy pha chế
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: LoggingInterceptor }],
 })
