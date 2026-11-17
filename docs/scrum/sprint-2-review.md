@@ -23,9 +23,9 @@
 
 | | Link |
 |---|---|
-| Web | *(URL Vercel)* |
-| API health | *(URL Render)/health* |
-| Lần chạy CD thành công | *(link Actions)* |
+| Web | https://brewlite-assignment2-ten.vercel.app |
+| API health | https://brewlite-api.onrender.com/health |
+| Lần chạy CD thành công | https://github.com/DuyPhong-181006/BrewLite-Assignment2-/actions/runs/44087825578 |
 | Release v1.0.0 | *(link Releases)* |
 | Video demo luồng end-to-end | *(link video)* |
 
