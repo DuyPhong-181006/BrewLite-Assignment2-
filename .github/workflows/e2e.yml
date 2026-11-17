@@ -1,0 +1,100 @@
+# TV5 – Lê An Tường: test end-to-end bằng trình duyệt thật (E2E-T01, Task 5.2)
+# Dựng CSDL + API + web ngay trên máy CI rồi chạy luồng menu -> giỏ -> đăng nhập -> thanh toán -> xác nhận.
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: brewlite
+          POSTGRES_PASSWORD: brewlite
+          POSTGRES_DB: brewlite_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U brewlite -d brewlite_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://brewlite:brewlite@localhost:5432/brewlite_e2e?schema=public
+      JWT_SECRET: ci-only-not-a-real-secret
+      MOCK_PAYMENT_DELAY_MS: 100
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: API – cài, migrate, seed, build
+        working-directory: apps/api
+        run: |
+          npm install --no-audit --no-fund
+          npx prisma generate
+          npx prisma migrate deploy
+          npx prisma db seed
+          npm run build
+      - name: API – chạy nền
+        working-directory: apps/api
+        run: nohup node dist/main.js > ../../api.log 2>&1 &
+
+      - name: Web – cài và build
+        working-directory: apps/web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Web – chạy nền
+        working-directory: apps/web
+        run: nohup npm start -- -p 3000 > ../../web.log 2>&1 &
+
+      - name: Chờ API và web sẵn sàng
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3001/health > /dev/null && curl -fsS http://localhost:3000 > /dev/null; then
+              echo "Sẵn sàng sau $((i * 2)) giây"; exit 0
+            fi
+            sleep 2
+          done
+          echo "API hoặc web không lên"; tail -50 api.log web.log; exit 1
+
+      - name: Cài Playwright
+        working-directory: tests/e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Chạy E2E
+        working-directory: tests/e2e
+        env:
+          E2E_BASE_URL: http://localhost:3000
+        run: npm test
+
+      - name: Lưu báo cáo khi lỗi
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            tests/e2e/playwright-report
+            tests/e2e/test-results
+            api.log
+            web.log
+          retention-days: 7
