@@ -1,0 +1,15 @@
+{
+  "name": "brewlite-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Test end-to-end BrewLite bằng Playwright: menu -> giỏ hàng -> đăng nhập -> thanh toán -> xác nhận đơn",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^22.0.0"
+  }
+}
