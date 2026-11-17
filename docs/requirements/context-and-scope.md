@@ -49,7 +49,7 @@ Xem menu → Chọn tùy chọn → Giỏ hàng → Đặt đơn → Thanh toán
 
 ### 3.2 Phạm vi mở rộng (sau MVP, nếu còn thời gian)
 
-- Màn hình cho nhân viên quầy chuyển trạng thái PAID → PREPARING → READY → COMPLETED (FR-13, mức Could).
+- ~~Màn hình cho nhân viên quầy chuyển trạng thái (FR-13, mức Could)~~ → đã làm trong Sprint 2 (màn `/staff`, xem SRS bản 1.1).
 - Dùng điểm thưởng để trừ tiền (bảng `LoyaltyTransaction` đã có loại `REDEEM` để dành).
 - Thông báo đẩy (push notification) khi đơn sẵn sàng; chạy offline bằng service worker.
 
