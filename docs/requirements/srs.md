@@ -56,7 +56,7 @@ Nguồn: [`usecase-overview.puml`](usecase-overview.puml). Use-case chi tiết c
 | FR-10 | Chống thanh toán trùng | Header `Idempotency-Key` bắt buộc cho `POST /payments` | Must | (1) Gửi 2 lần cùng key → cùng 1 giao dịch, chỉ trừ tiền 1 lần. (2) Thiếu key → 400. | INT-T03, UNIT-T16 |
 | FR-11 | Mã giảm giá | Nhập mã ở bước thanh toán, giảm theo %, có mức tối đa | Should | (1) `GET /coupons/:code/validate?subtotal=` trả số tiền giảm. (2) Mã không tồn tại → 404; hết hạn, hết lượt, chưa đạt giá trị tối thiểu → 400. (3) Không phân biệt hoa/thường. | UNIT-T08 → UNIT-T11 |
 | FR-12 | Điểm thưởng | Cộng điểm khi đơn được thanh toán | Should | (1) 10.000đ = 1 điểm, tính trên tổng sau giảm giá. (2) Mỗi đơn cộng 1 lần, ghi 1 dòng `LoyaltyTransaction` loại EARN. (3) `GET /loyalty/me` trả tổng điểm và lịch sử. | UNIT-T12 → UNIT-T14, INT-T02 |
-| FR-13 | Nhân viên cập nhật trạng thái | Barista chuyển PAID → PREPARING → READY → COMPLETED | Could | Nhân viên đổi trạng thái thì màn xác nhận của khách hiện bước mới. *(Làm nếu Sprint 2 còn thời gian.)* | – |
+| FR-13 | Nhân viên cập nhật trạng thái | Barista chuyển PAID → PREPARING → READY → COMPLETED trên màn quầy `/staff` | Could | (1) Chỉ vào được khi có mã nhân viên đúng (header `X-Staff-Key`), sai → 401. (2) Chỉ đi đúng thứ tự PAID → PREPARING → READY → COMPLETED, nhảy bước → 400. (3) Màn xác nhận của khách tự cập nhật bước mới trong vòng 5 giây. | UNIT-T17, INT-T06 |
 | FR-14 | Thanh toán tiền mặt, giao hàng | – | Won't | Không làm trong dự án (xem out-of-scope). | – |
 
 ## 5. Yêu cầu phi chức năng
@@ -85,6 +85,7 @@ Nguồn: [`usecase-overview.puml`](usecase-overview.puml). Use-case chi tiết c
 | PATCH | `/orders/:id/cancel` | Có | FR-08 |
 | POST | `/payments` (header `Idempotency-Key`) | Có | FR-05, FR-10, FR-12 |
 | GET | `/loyalty/me` | Có | FR-12 |
+| GET, PATCH | `/staff/orders`, `/staff/orders/:id/status` | Mã nhân viên (`X-Staff-Key`) | FR-13 |
 
 ## 7. Quản lý thay đổi yêu cầu
 
@@ -93,3 +94,4 @@ Mọi thay đổi yêu cầu sửa trực tiếp file này qua Pull Request, ghi
 | Ngày | Phiên bản | Thay đổi | Người |
 |---|---|---|---|
 | 16/11/2026 | 1.0 | Bản đầu tiên cho Assignment 2 | TV2 |
+| 21/11/2026 | 1.1 | FR-13 (Could) đã làm trong Sprint 2 nhờ còn thời gian: thêm tiêu chí chấp nhận và mã test UNIT-T17, INT-T06. Lý do: màn xác nhận cần trạng thái đơn đi tiếp để demo đủ luồng "theo dõi đơn" | TV2 |
