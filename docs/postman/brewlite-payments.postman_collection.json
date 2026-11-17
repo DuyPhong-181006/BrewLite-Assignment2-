@@ -1,0 +1,979 @@
+{
+  "info": {
+    "name": "BrewLite – Thanh toán (TV6 Nguyễn Tấn Sự)",
+    "description": "Chạy backend (cổng 3001), CSDL đã seed (docker compose up). Bấm Run collection để chạy lần lượt 1 → 20. Mỗi request thanh toán tự tạo Idempotency-Key mới trong tab Pre-request (biến payKey), riêng request \"Gửi lại CÙNG Idempotency-Key\" dùng lại key cũ để chứng minh chống trùng. Client chỉ gửi orderId + method (WALLET / CARD); số tiền do backend lấy từ tổng đơn. Request 1 đăng nhập tài khoản demo và lưu token; các request sau tự gửi kèm token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Đăng nhập tài khoản demo (lấy token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"demo@brewlite.vn\",\n  \"password\": \"123456\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Đăng nhập thành công\", () => pm.expect([200, 201]).to.include(pm.response.code));",
+              "pm.collectionVariables.set(\"token\", pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Tạo đơn để thanh toán (Cappuccino M x1)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"productId\": 3,\n      \"size\": \"M\",\n      \"qty\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 201\", () => pm.response.to.have.status(201));",
+              "const o = pm.response.json();",
+              "pm.test(\"Đơn đang PENDING (chờ thanh toán)\", () => pm.expect(o.status).to.eql(\"PENDING\"));",
+              "pm.collectionVariables.set(\"orderId\", o.id);",
+              "pm.collectionVariables.set(\"orderTotal\", o.total);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Lỗi: chưa đăng nhập (không có token) -> 401",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId}},\n  \"method\": \"WALLET\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Thanh toán bằng Ví điện tử (WALLET) – tạo Idempotency-Key mới",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId}},\n  \"method\": \"WALLET\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 201\", () => pm.response.to.have.status(201));",
+              "const p = pm.response.json();",
+              "pm.test(\"Giao dịch SUCCESS\", () => pm.expect(p.status).to.eql(\"SUCCESS\"));",
+              "pm.test(\"Số tiền = tổng đơn do backend tính (client không gửi amount)\", () => pm.expect(p.amount).to.eql(Number(pm.collectionVariables.get(\"orderTotal\"))));",
+              "pm.collectionVariables.set(\"paymentId\", p.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Gửi lại CÙNG Idempotency-Key (giả lập bấm 2 lần) -> trả lại giao dịch cũ",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId}},\n  \"method\": \"WALLET\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 201\", () => pm.response.to.have.status(201));",
+              "pm.test(\"Cùng mã giao dịch với lần trước -> không trừ tiền 2 lần\", () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"paymentId\"))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Xem đơn sau khi trả -> PAID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/orders/{{orderId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders",
+            "{{orderId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Đơn đã PAID\", () => pm.expect(pm.response.json().status).to.eql(\"PAID\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Lỗi: trả tiếp đơn đã PAID bằng key mới -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId}},\n  \"method\": \"CARD\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Lỗi: thiếu Idempotency-Key -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId}},\n  \"method\": \"WALLET\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Lỗi: client tự gửi số tiền (amount) -> 400 (chống sửa giá)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId}},\n  \"method\": \"WALLET\",\n  \"amount\": 1000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Lỗi: phương thức không hợp lệ (CASH – tiền mặt) -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId}},\n  \"method\": \"CASH\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Lỗi: orderId không phải số -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": \"abc\",\n  \"method\": \"WALLET\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Lỗi: đơn không tồn tại -> 404",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": 999999,\n  \"method\": \"WALLET\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Tạo đơn thứ 2 (để thử thanh toán lỗi)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"productId\": 3,\n      \"size\": \"M\",\n      \"qty\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 201\", () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set(\"orderId2\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Thanh toán LỖI (giả lập cổng từ chối) -> giao dịch FAILED",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId2}},\n  \"method\": \"CARD\",\n  \"simulateFailure\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 201\", () => pm.response.to.have.status(201));",
+              "const p = pm.response.json();",
+              "pm.test(\"Giao dịch FAILED, có lý do lỗi\", () => { pm.expect(p.status).to.eql(\"FAILED\"); pm.expect(p.failureReason).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. Xem đơn 2 -> PAYMENT_FAILED",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/orders/{{orderId2}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders",
+            "{{orderId2}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Đơn ở trạng thái PAYMENT_FAILED\", () => pm.expect(pm.response.json().status).to.eql(\"PAYMENT_FAILED\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. Thử lại bằng Thẻ (CARD), key mới -> SUCCESS",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId2}},\n  \"method\": \"CARD\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 201\", () => pm.response.to.have.status(201));",
+              "pm.test(\"Giao dịch SUCCESS\", () => pm.expect(pm.response.json().status).to.eql(\"SUCCESS\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17. Xem đơn 2 -> PAID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/orders/{{orderId2}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders",
+            "{{orderId2}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Đơn đã PAID sau khi thử lại\", () => pm.expect(pm.response.json().status).to.eql(\"PAID\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18. Tạo đơn thứ 3 rồi hủy",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"productId\": 3,\n      \"size\": \"M\",\n      \"qty\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 201\", () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set(\"orderId3\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19. Hủy đơn 3 (API của TV4)",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/orders/{{orderId3}}/cancel",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "orders",
+            "{{orderId3}}",
+            "cancel"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Đơn đã CANCELLED\", () => pm.expect(pm.response.json().status).to.eql(\"CANCELLED\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20. Lỗi: thanh toán đơn đã hủy -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{payKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/payments",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "payments"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId3}},\n  \"method\": \"WALLET\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"payKey\", \"pm_\" + Date.now() + \"_\" + Math.floor(Math.random() * 1000));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Mã trạng thái 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001"
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "orderTotal",
+      "value": ""
+    },
+    {
+      "key": "orderId2",
+      "value": ""
+    },
+    {
+      "key": "orderId3",
+      "value": ""
+    },
+    {
+      "key": "payKey",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  }
+}
