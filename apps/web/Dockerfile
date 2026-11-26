@@ -1,4 +1,4 @@
-# TV1 – Image Next.js cho docker compose (production dùng Vercel, xem docs/deployment.md)
+# TV1 – Image Next.js: dùng cho docker compose local và server AWS EC2 (CD build với NEXT_PUBLIC_API_URL=/api, xem docs/deployment.md)
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package*.json ./

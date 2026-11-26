@@ -1,0 +1,88 @@
+# TV1 – Đào Duy Phong: chạy production trên 1 máy chủ AWS EC2 (Ubuntu) – xem docs/deployment.md mục 3
+#
+#   Internet --80/443--> proxy (Caddy) --/------> web (Next.js :3000)
+#                                      --/api/*-> api (NestJS :3001) --5432--> db (PostgreSQL)
+#
+# Chỉ proxy mở cổng ra ngoài (80, 443). api, web, db nằm trong mạng nội bộ của Docker.
+# Biến môi trường đọc từ file .env ở thư mục gốc repo TRÊN SERVER (mẫu: deploy/.env.prod.example, không commit).
+#
+# Image lấy từ GHCR theo tag commit SHA (IMAGE_TAG) do pipeline CD build sẵn -> server 1 GB RAM không phải build.
+#   Chạy:       docker compose -f docker-compose.prod.yml up -d
+#   Deploy SHA: bash deploy/deploy.sh <commit-sha>   (CD gọi qua SSH)
+#   Tự build trên server (khi không kéo được image): docker compose -f docker-compose.prod.yml up -d --build
+name: brewlite
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: brewlite
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Chua dat POSTGRES_PASSWORD trong .env}
+      POSTGRES_DB: brewlite
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Không có "ports": CSDL không mở ra Internet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brewlite -d brewlite"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: ghcr.io/${GHCR_OWNER:-duyphong-181006}/brewlite-api:${IMAGE_TAG:-latest}
+    build:
+      context: ./apps/api
+      args:
+        APP_VERSION: ${IMAGE_TAG:-local}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://brewlite:${POSTGRES_PASSWORD}@db:5432/brewlite?schema=public
+      JWT_SECRET: ${JWT_SECRET:?Chua dat JWT_SECRET trong .env}
+      STAFF_KEY: ${STAFF_KEY:?Chua dat STAFF_KEY trong .env}
+      FRONTEND_URL: ${PUBLIC_URL:?Chua dat PUBLIC_URL trong .env}
+      RUN_SEED: ${RUN_SEED:-true}
+      MOCK_PAYMENT_DELAY_MS: ${MOCK_PAYMENT_DELAY_MS:-300}
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:-duyphong-181006}/brewlite-web:${IMAGE_TAG:-latest}
+    build:
+      context: ./apps/web
+      args:
+        # Trình duyệt gọi API cùng địa chỉ với web (https://<server>/api/...) -> image không phụ thuộc IP
+        NEXT_PUBLIC_API_URL: /api
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

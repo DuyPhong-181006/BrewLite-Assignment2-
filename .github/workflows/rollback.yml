@@ -1,16 +1,16 @@
 # TV1 – Rollback thủ công: Actions -> Rollback -> Run workflow -> nhập commit SHA của bản tốt trước đó.
-# API: Render chạy lại image ghcr.io/<owner>/brewlite-api:<sha> (image cũ vẫn còn trên GHCR).
-# Web: Vercel đưa bản production trước đó lên lại.
+# AWS EC2 (production chính): SSH vào server chạy deploy/deploy.sh <sha> -> kéo lại image API + web :<sha> từ GHCR.
+# Render (bản phụ): chạy lại image ghcr.io/<owner>/brewlite-api:<sha>. Vercel (bản phụ): đưa bản production trước lên lại.
 name: Rollback
 
 on:
   workflow_dispatch:
     inputs:
       sha:
-        description: 'Commit SHA của bản API muốn quay về (xem tab Actions hoặc trang Packages)'
+        description: 'Commit SHA của bản muốn quay về (xem lần chạy CD xanh trước đó trong tab Actions)'
         required: true
       web:
-        description: 'Rollback cả web trên Vercel?'
+        description: 'Rollback cả web trên Vercel (bản phụ)?'
         type: boolean
         default: true
 
@@ -20,9 +20,44 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
+  rollback-ec2:
+    if: ${{ vars.EC2_HOST != '' }}
+    runs-on: ubuntu-latest
+    environment: production-aws
+    env:
+      SHA: ${{ inputs.sha }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      EC2_URL: ${{ vars.EC2_URL }}
+      SSH_TARGET: ${{ vars.EC2_USER || 'ubuntu' }}@${{ vars.EC2_HOST }}
+      APP_DIR: ${{ vars.EC2_APP_DIR || 'brewlite' }}
+    steps:
+      - name: Chuẩn bị khóa SSH
+        env:
+          KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2> /dev/null
+      - name: Chạy lại bản cũ trên server
+        run: |
+          echo "$GHCR_TOKEN" | ssh -i ~/.ssh/ec2.pem "$SSH_TARGET" "docker login ghcr.io -u ${{ github.actor }} --password-stdin > /dev/null \
+            && bash $APP_DIR/deploy/deploy.sh $SHA; rc=\$?; docker logout ghcr.io > /dev/null; exit \$rc"
+      - name: Kiểm tra /api/health trả đúng phiên bản
+        run: |
+          for i in $(seq 1 30); do
+            v=$(curl -fsS --max-time 20 "$EC2_URL/api/health" | jq -r '.version // empty' || true)
+            if [ "$v" = "$SHA" ]; then echo "Đã quay về $SHA"; exit 0; fi
+            echo "Lần $i: đang chạy '$v', chờ 10s..."; sleep 10
+          done
+          exit 1
+
   rollback-api:
+    if: ${{ vars.API_URL != '' }}
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -47,7 +82,7 @@ jobs:
           exit 1
 
   rollback-web:
-    if: ${{ inputs.web }}
+    if: ${{ inputs.web && vars.WEB_URL != '' }}
     runs-on: ubuntu-latest
     environment: production-web
     env:

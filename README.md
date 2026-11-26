@@ -9,9 +9,9 @@ Xem menu → Chọn size, topping → Giỏ hàng → Đặt đơn → Thanh to�
 
 | | URL |
 |---|---|
-| **Web (production)** | https://brewlite.vercel.app *(TV1 cập nhật đúng URL sau khi deploy)* |
-| **API** | https://brewlite-api.onrender.com |
-| **Health check** | https://brewlite-api.onrender.com/health |
+| **Web (production)** | https://brewlite-assignment2-ten.vercel.app |
+| **API** | https://brewlite-api-1rs6.onrender.com |
+| **Health check** | https://brewlite-api-1rs6.onrender.com/health |
 | Tài khoản demo | `demo@brewlite.vn` / `123456` · Mã giảm giá: `WELCOME10`, `BREW20` |
 | Màn quầy pha chế | `/staff` – mã nhân viên local: `barista-demo-key` (production: hỏi nhóm) |
 
@@ -130,13 +130,15 @@ Cách cấu hình Render, Vercel, secret và quy trình rollback chi tiết: **[
 - Scrum: [Product Backlog](docs/scrum/product-backlog.md) · [Sprint 1 Review](docs/scrum/sprint-1-review.md) · [Sprint 2 Review](docs/scrum/sprint-2-review.md) · [Retrospective](docs/scrum/retrospective.md)
 - Quy ước nhóm: [CONTRIBUTING.md](CONTRIBUTING.md)
 
-## Nhóm
+## Phân công nhóm
 
-| TV | Họ tên | Vai trò |
-|---|---|---|
-| TV1 | Đào Duy Phong | Scrum Master, DevOps |
-| TV2 | Lê Hữu Nhân | Product Owner |
-| TV3 | Phạm Tuấn | Developer |
-| TV4 | Phạm Thành Danh | Developer |
-| TV5 | An Tường | Developer |
-| TV6 | Nguyễn Tấn Sự | Developer |
+| TV | Họ tên | Vai trò Scrum | Phụ trách chính |
+|---|---|---|---|
+| TV1 | Đào Duy Phong | Scrum Master, DevOps | Monorepo, Docker, CI/CD, health check, kiến trúc, GHCR, Render/Vercel, rollback, release |
+| TV2 | Lê Hữu Nhân | Product Owner | Bối cảnh, SRS, backlog, seed menu, mã giảm giá, ma trận truy vết, Sprint Review |
+| TV3 | Phạm Tuấn | Developer | Migration/schema, API/menu, chi tiết sản phẩm, tồn kho, optimistic locking, máy trạng thái đơn, màn quầy pha chế |
+| TV4 | Phạm Thành Danh | Developer | UC-01, activity diagram, giỏ hàng, API tạo/lịch sử/hủy đơn |
+| TV5 | An Tường | Developer | Class diagram, JWT, đăng nhập/đăng ký, điểm thưởng, xác nhận/lịch sử đơn, test E2E Playwright |
+| TV6 | Nguyễn Tấn Sự | Developer | Sequence diagram, đặc tả thanh toán, ADR idempotency và mock payment |
+
+Kế hoạch phân công chi tiết theo từng Sprint và thứ tự merge: [Product Backlog](docs/scrum/product-backlog.md). Quy ước branch và commit: [CONTRIBUTING.md](CONTRIBUTING.md).

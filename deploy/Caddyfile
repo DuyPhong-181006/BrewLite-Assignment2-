@@ -1,0 +1,20 @@
+# TV1 – Cổng vào duy nhất của server BrewLite trên AWS EC2 (cổng 80/443)
+#   PUBLIC_URL=https://<ip-dang-gach-ngang>.sslip.io -> Caddy tự xin chứng chỉ HTTPS (Let's Encrypt), tự gia hạn
+#   PUBLIC_URL=http://<ip>                           -> chỉ chạy HTTP (dùng khi chưa xin được chứng chỉ)
+{$PUBLIC_URL} {
+	encode gzip
+
+	# /api/products -> API nhận /products (bỏ tiền tố /api)
+	handle_path /api/* {
+		reverse_proxy api:3001
+	}
+
+	# Mọi đường dẫn khác -> giao diện Next.js
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+	}
+}

@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_SD4W5Vm4BqTwOY6lV0kjG6hw8JBM",
+      "name": "brew-lite-assignment2",
+      "directory": "apps/web",
+      "orgId": "team_FWz0zjHDfoNb0yMhFBWWK4RE"
+    }
+  ]
+}

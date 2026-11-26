@@ -1,9 +1,13 @@
 # TV1 – Đào Duy Phong: Continuous Delivery/Deployment (Task 5.3)
-# Push/Tag -> Lint và Test -> Build -> Docker image (tag = commit SHA) -> Push GHCR -> Deploy -> Smoke test
+# Push/Tag -> Lint và Test -> Build -> Docker image API + web (tag = commit SHA) -> Push GHCR -> Deploy -> Smoke test
 #
+# Production chính: AWS EC2 (Ubuntu + Docker Compose + Caddy) – job deploy-ec2, xem ADR-007.
+# Bản phụ: Render (API) + Vercel (web) – job deploy-api, deploy-web, xem ADR-006. Xóa biến API_URL để tắt.
 # Cần cấu hình trước trong GitHub: Settings -> Secrets and variables -> Actions (xem docs/deployment.md)
-#   Secrets:   RENDER_DEPLOY_HOOK_URL, VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
-#   Variables: API_URL (vd https://brewlite-api.onrender.com), WEB_URL (vd https://brewlite.vercel.app)
+#   Secrets:   EC2_SSH_KEY (nội dung file .pem của key pair)
+#              RENDER_DEPLOY_HOOK_URL, VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (bản phụ)
+#   Variables: EC2_HOST (IP server), EC2_URL (vd https://203-0-113-10.sslip.io), EC2_USER (mặc định ubuntu)
+#              API_URL, WEB_URL (bản phụ)
 name: CD
 
 on:
@@ -55,9 +59,101 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 3. Deploy API lên Render bằng image vừa đẩy -> smoke test -> lỗi thì tự quay về bản trước
+  # 2b. Đóng gói web Next.js cho server EC2. API gọi qua cùng địa chỉ (/api) nên image không phụ thuộc IP server
+  image-web:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tên image (GHCR yêu cầu chữ thường)
+        id: meta
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/brewlite-web" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build và push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          push: true
+          build-args: NEXT_PUBLIC_API_URL=/api
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  # 3a. Deploy production chính lên AWS EC2: SSH bằng key pair -> deploy/deploy.sh <sha> -> smoke test
+  #     Lỗi thì tự chạy lại deploy/deploy.sh với SHA trước đó. Chưa đặt biến EC2_HOST thì bỏ qua job này.
+  deploy-ec2:
+    needs: [image, image-web]
+    if: ${{ vars.EC2_HOST != '' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production-aws
+      url: ${{ vars.EC2_URL }}
+    env:
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      EC2_URL: ${{ vars.EC2_URL }}
+      SSH_TARGET: ${{ vars.EC2_USER || 'ubuntu' }}@${{ vars.EC2_HOST }}
+      APP_DIR: ${{ vars.EC2_APP_DIR || 'brewlite' }}
+    steps:
+      - name: Chuẩn bị khóa SSH (key pair của EC2)
+        env:
+          KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2> /dev/null
+          echo "SSH=ssh -i $HOME/.ssh/ec2.pem -o ConnectTimeout=20 $SSH_TARGET" >> "$GITHUB_ENV"
+
+      - name: Ghi lại phiên bản đang chạy (để rollback)
+        id: prev
+        run: |
+          prev=$($SSH "cat $APP_DIR/.deployed_tag 2> /dev/null" || true)
+          echo "Phiên bản đang chạy: ${prev:-chưa có}"
+          echo "sha=$prev" >> "$GITHUB_OUTPUT"
+
+      # GITHUB_TOKEN chỉ dùng để kéo image trong lúc deploy, xong thì đăng xuất
+      - name: Deploy commit này lên server
+        run: |
+          echo "$GHCR_TOKEN" | $SSH "docker login ghcr.io -u ${{ github.actor }} --password-stdin > /dev/null \
+            && bash $APP_DIR/deploy/deploy.sh $GITHUB_SHA; rc=\$?; docker logout ghcr.io > /dev/null; exit \$rc"
+
+      - name: Smoke test
+        id: smoke
+        run: |
+          for i in $(seq 1 30); do
+            body=$(curl -fsS --max-time 20 "$EC2_URL/api/health" || true)
+            if [ "$(echo "$body" | jq -r '.status // empty' 2> /dev/null)" = "ok" ] && \
+               [ "$(echo "$body" | jq -r '.version // empty' 2> /dev/null)" = "$GITHUB_SHA" ]; then
+              echo "API khỏe: $body"
+              curl -fsS --max-time 20 "$EC2_URL/api/products" | jq 'length' | xargs echo "Số món trong menu:"
+              curl -fsS --max-time 20 "$EC2_URL" | grep -q "BrewLite" && echo "Web OK: $EC2_URL" && exit 0
+            fi
+            echo "Lần $i: chưa sẵn sàng, chờ 10s..."; sleep 10
+          done
+          echo "::error::Smoke test trên EC2 thất bại sau 5 phút"
+          exit 1
+
+      - name: Tự rollback về bản trước
+        if: failure() && steps.prev.outputs.sha != ''
+        env:
+          PREV: ${{ steps.prev.outputs.sha }}
+        run: |
+          echo "$GHCR_TOKEN" | $SSH "docker login ghcr.io -u ${{ github.actor }} --password-stdin > /dev/null \
+            && bash $APP_DIR/deploy/deploy.sh $PREV; rc=\$?; docker logout ghcr.io > /dev/null; exit \$rc"
+          echo "::warning::Đã quay server EC2 về $PREV. Pipeline vẫn báo lỗi để nhóm kiểm tra."
+
+  # 3b. Bản phụ: deploy API lên Render bằng image vừa đẩy -> smoke test -> lỗi thì tự quay về bản trước
   deploy-api:
     needs: image
+    if: ${{ vars.API_URL != '' }}
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -109,7 +205,7 @@ jobs:
           curl -fsS -X POST "${HOOK}&imgURL=${img}" > /dev/null
           echo "::warning::Đã yêu cầu Render quay về image $IMAGE:$PREV. Pipeline vẫn báo lỗi để nhóm kiểm tra."
 
-  # 4. Deploy web lên Vercel (chỉ chạy khi API đã khỏe) -> smoke test trang chủ
+  # 4. Bản phụ: deploy web lên Vercel (chỉ chạy khi API trên Render đã khỏe) -> smoke test trang chủ
   deploy-web:
     needs: deploy-api
     runs-on: ubuntu-latest
