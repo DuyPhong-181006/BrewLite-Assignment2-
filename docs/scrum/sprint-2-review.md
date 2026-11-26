@@ -26,7 +26,7 @@
 |---|---|
 | Web (AWS EC2) | https://203-0-113-10.sslip.io *(điền đúng địa chỉ server)* |
 | API health (AWS EC2) | https://203-0-113-10.sslip.io/api/health |
-| Web (bản phụ Vercel) | https://brewlite-assignment2-ten.vercel.app |
+| Web (bản phụ Vercel) | https://brew-lite-assignment2-ten.vercel.app |
 | API health (bản phụ Render) | https://brewlite-api-1rs6.onrender.com/health |
 | Lần chạy CD thành công | https://github.com/DuyPhong-181006/BrewLite-Assignment2-/actions/runs/44087825578 |
 | Release v1.0.0 | *(link Releases)* |

@@ -7,7 +7,7 @@
 
 | Thành phần | Production chính: AWS EC2 | Bản phụ |
 |---|---|---|
-| Địa chỉ | `https://<ip>.sslip.io` *(điền đúng, vd `https://203-0-113-10.sslip.io`)* | Web `https://brewlite-assignment2-ten.vercel.app`, API `https://brewlite-api-1rs6.onrender.com` |
+| Địa chỉ | `https://<ip>.sslip.io` *(điền đúng, vd `https://203-0-113-10.sslip.io`)* | Web `https://brew-lite-assignment2-ten.vercel.app`, API `https://brewlite-api-1rs6.onrender.com` |
 | Cổng vào, HTTPS | Container Caddy 2, cổng 80/443, chứng chỉ Let's Encrypt tự động | Vercel, Render |
 | Web Next.js | Container `brewlite-web:<sha>`, gọi API qua `/api` | Vercel |
 | API NestJS | Container `brewlite-api:<sha>`, đường dẫn `/api/*` | Render Web Service |
@@ -176,7 +176,7 @@ Image chỉ có sau lần chạy `cd.yml` đầu tiên, nhưng Render cần imag
    |---|---|
    | `DATABASE_URL` | Internal Database URL ở bước 4.1 |
    | `JWT_SECRET` | chuỗi ngẫu nhiên dài (Render có nút **Generate**) |
-   | `FRONTEND_URL` | `https://brewlite.vercel.app` (URL web thật, nhiều URL cách nhau dấu phẩy) |
+   | `FRONTEND_URL` | `https://brew-lite-assignment2-ten.vercel.app` (URL web thật, nhiều URL cách nhau dấu phẩy) |
    | `RUN_SEED` | `true` |
    | `MOCK_PAYMENT_DELAY_MS` | `300` |
    | `STAFF_KEY` | mã nhân viên cho màn quầy `/staff` (đặt chuỗi riêng, không dùng `barista-demo-key`) |
@@ -184,12 +184,12 @@ Image chỉ có sau lần chạy `cd.yml` đầu tiên, nhưng Render cần imag
    Không cần đặt `PORT`: Render tự cấp, API đọc `process.env.PORT`.
 3. **Settings → Health Check Path:** `/health`.
 4. **Settings → Deploy Hook:** sao chép URL (dạng `https://api.render.com/deploy/srv-xxx?key=yyy`) – đây là **secret**.
-5. Mở `https://brewlite-api.onrender.com/health` → thấy `{"status":"ok","db":"up",…}`.
+5. Mở `https://brewlite-api-1rs6.onrender.com/health` → thấy `{"status":"ok","db":"up",…}`.
 
 ### 4.4 Vercel cho web
 
 1. https://vercel.com → **Add New → Project** → Import repo GitHub. **Root Directory: `apps/web`**, Framework: Next.js.
-2. **Environment Variables (Production):** `NEXT_PUBLIC_API_URL` = `https://brewlite-api.onrender.com`.
+2. **Environment Variables (Production):** `NEXT_PUBLIC_API_URL` = `https://brewlite-api-1rs6.onrender.com`.
 3. **Settings → Git → Ignored Build Step**: chọn *Don't build anything* (hoặc tắt tự deploy) – deploy chỉ đi qua pipeline CD.
 4. Tạo token: Account Settings → **Tokens** → Create (scope project của nhóm).
 5. Lấy `orgId`, `projectId`: chạy `npx vercel link` trong `apps/web` trên máy, mở file `apps/web/.vercel/project.json` (thư mục này đã bị `.gitignore`, không commit).
@@ -204,8 +204,8 @@ Repo → **Settings → Secrets and variables → Actions**:
 | Secret | `VERCEL_TOKEN` | token ở 4.4 |
 | Secret | `VERCEL_ORG_ID` | `orgId` |
 | Secret | `VERCEL_PROJECT_ID` | `projectId` |
-| Variable | `API_URL` | `https://brewlite-api.onrender.com` (không có `/` cuối) |
-| Variable | `WEB_URL` | `https://brewlite.vercel.app` |
+| Variable | `API_URL` | `https://brewlite-api-1rs6.onrender.com` (không có `/` cuối) |
+| Variable | `WEB_URL` | `https://brew-lite-assignment2-ten.vercel.app` |
 
 Sau đó vào **Actions → CD → Run workflow** để chạy deploy đầy đủ lần đầu.
 
@@ -244,7 +244,7 @@ Sau đó vào **Actions → CD → Run workflow** để chạy deploy đầy đ�
 3. Đăng nhập `demo@brewlite.vn / 123456` → thêm món → thanh toán Ví → thấy "Đặt hàng thành công".
 4. Mở `/staff`, nhập `STAFF_KEY` → đơn vừa đặt nằm ở cột "Đã trả tiền" → bấm "Bắt đầu pha" → màn xác nhận đổi sang "Đang pha".
 5. Trên server: `docker compose -f docker-compose.prod.yml logs api | tail` → thấy dòng `POST /payments 201 …ms`, không có token/mật khẩu trong log.
-6. Bản phụ: làm lại bước 1–2 với `https://brewlite-api-1rs6.onrender.com/health` và URL Vercel.
+6. Bản phụ: làm lại bước 1–2 với `https://brewlite-api-1rs6.onrender.com/health` và `https://brew-lite-assignment2-ten.vercel.app`.
 
 ## 9. Phát hành phiên bản
 

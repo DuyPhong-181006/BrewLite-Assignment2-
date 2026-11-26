@@ -11,7 +11,7 @@ Xem menu → Chọn size, topping → Giỏ hàng → Đặt đơn → Thanh to�
 |---|---|
 | **Web (production – AWS EC2)** | https://203-0-113-10.sslip.io *(TV1 điền đúng địa chỉ server sau khi deploy)* |
 | **Health check** | https://203-0-113-10.sslip.io/api/health |
-| Bản phụ (Render + Vercel) | Web https://brewlite-assignment2-ten.vercel.app · API https://brewlite-api-1rs6.onrender.com/health |
+| Bản phụ (Render + Vercel) | Web https://brew-lite-assignment2-ten.vercel.app · API https://brewlite-api-1rs6.onrender.com/health |
 | Tài khoản demo | `demo@brewlite.vn` / `123456` · Mã giảm giá: `WELCOME10`, `BREW20` |
 | Màn quầy pha chế | `/staff` – mã nhân viên local: `barista-demo-key` (production: hỏi nhóm) |
 
