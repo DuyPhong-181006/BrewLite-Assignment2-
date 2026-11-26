@@ -85,8 +85,11 @@ else (thất bại)
     note right: Quay lại bước POST /payments
     detach
   else (không – hủy đơn)
+    :Bấm "Hủy đơn" rồi xác nhận\n(trang thanh toán hoặc trang chi tiết đơn);
     |NestJS API|
     :PATCH /orders/:id/cancel:\nđơn CANCELLED, trả lại tồn kho (FR-08);
+    |Next.js UI|
+    :Báo "Đã hủy đơn", giỏ hàng vẫn giữ;
     |Khách hàng|
     stop
   endif

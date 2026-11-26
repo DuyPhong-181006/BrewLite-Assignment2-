@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import CancelOrderButton from '@/components/CancelOrderButton';
 import CouponInput from '@/components/CouponInput';
 import { cartTotal, useCart } from '@/store/cart';
 import { API_URL, authHeader, errorMessage, useAuth } from '@/store/auth';
 
 // TV6 – Màn (4) Thanh toán (Task 8, wireframe Mục 7): Tổng, Phương thức (Ví / Thẻ), "Xác nhận trả"
 // Luồng: POST /orders (TV4) tạo đơn PENDING -> POST /payments (TV6) -> thành công: xóa giỏ, sang màn (5) Xác nhận
-//        thất bại: đơn PAYMENT_FAILED, GIỮ NGUYÊN giỏ hàng, bấm lại để thử lại (US-05)
+//        thất bại: đơn PAYMENT_FAILED, GIỮ NGUYÊN giỏ hàng, bấm lại để thử lại (US-05) hoặc bấm "Hủy đơn" (TV4, FR-08)
 
 type Method = 'WALLET' | 'CARD';
 type Payment = { id: number; status: 'PROCESSING' | 'SUCCESS' | 'FAILED'; failureReason: string | null };
@@ -35,6 +36,9 @@ export default function CheckoutPage() {
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // TV4: đơn vừa thanh toán lỗi -> hiện nút "Hủy đơn" (activity UC-01: Thử lại? -> không -> hủy đơn)
+  const [failedOrderId, setFailedOrderId] = useState<number | null>(null);
+  const [notice, setNotice] = useState('');
 
   // Đơn đã tạo nhưng chưa trả được -> bấm lại thì thử lại ĐÚNG đơn đó, không tạo đơn mới
   const pendingOrder = useRef<{ id: number; signature: string } | null>(null);
@@ -76,6 +80,7 @@ export default function CheckoutPage() {
   const handlePay = async () => {
     setLoading(true);
     setError('');
+    setNotice('');
     try {
       // 1. Tạo đơn (POST /orders – TV4). Giá, giảm giá, tổng do BACKEND tính lại từ CSDL.
       const signature = JSON.stringify([items.map((i) => [i.productId, i.size, i.toppings, i.qty]), couponCode]);
@@ -86,6 +91,7 @@ export default function CheckoutPage() {
           headers: authHeader(token),
         }).catch(() => {});
         pendingOrder.current = null;
+        setFailedOrderId(null);
       }
       if (!pendingOrder.current) {
         const res = await fetch(`${API_URL}/orders`, {
@@ -123,12 +129,14 @@ export default function CheckoutPage() {
 
       if (payment.status !== 'SUCCESS') {
         // US-05: đơn PAYMENT_FAILED, giữ nguyên giỏ hàng
-        setError(`Thanh toán lỗi${payment.failureReason ? `: ${payment.failureReason}` : ''}. Giỏ hàng vẫn được giữ nguyên, bấm "Xác nhận trả" để thử lại.`);
+        setError(`Thanh toán lỗi${payment.failureReason ? `: ${payment.failureReason}` : ''}. Giỏ hàng vẫn được giữ nguyên, bấm "Xác nhận trả" để thử lại hoặc hủy đơn.`);
+        setFailedOrderId(orderId);
         return;
       }
 
       // 3. Thành công: xóa giỏ, sang màn (5) Xác nhận đơn (TV5)
       pendingOrder.current = null;
+      setFailedOrderId(null);
       clear();
       router.push(`/orders/${orderId}`);
     } catch (e) {
@@ -231,6 +239,26 @@ export default function CheckoutPage() {
           {error && (
             <p role="alert" className="mt-4 animate-rise rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
               {error}
+            </p>
+          )}
+
+          {/* TV4: thanh toán lỗi -> khách chọn hủy đơn thay vì thử lại (PATCH /orders/:id/cancel, trả lại kho) */}
+          {failedOrderId !== null && !loading && (
+            <CancelOrderButton
+              orderId={failedOrderId}
+              onUnauthorized={sessionExpired}
+              onCancelled={(o) => {
+                pendingOrder.current = null; // lần bấm "Xác nhận trả" sau sẽ tạo đơn mới
+                payKey.current = null;
+                setFailedOrderId(null);
+                setError('');
+                setNotice(`Đã hủy đơn #${o.id}. Giỏ hàng vẫn giữ nguyên, bạn có thể đặt lại.`);
+              }}
+            />
+          )}
+          {notice && (
+            <p role="status" className="mt-4 rounded-xl border border-line bg-leaf-soft p-3 text-sm text-leaf">
+              {notice}
             </p>
           )}
 
