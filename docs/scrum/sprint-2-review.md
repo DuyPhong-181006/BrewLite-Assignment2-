@@ -18,13 +18,16 @@
 | S2-8 | CD, deploy production, release v1.0.0 | TV1 | Done |
 | S2-9 | Ma trận truy vết, Sprint Review | TV2 | Done |
 | S2-10 | Màn quầy pha chế (FR-13) | TV3 | Done |
+| S2-11 | Production chính trên AWS EC2 (ADR-007) | TV1, TV6 | Done |
 
 ## Demo trên production
 
 | | Link |
 |---|---|
-| Web | https://brewlite-assignment2-ten.vercel.app |
-| API health | https://brewlite-api-1rs6.onrender.com/health |
+| Web (AWS EC2) | https://203-0-113-10.sslip.io *(điền đúng địa chỉ server)* |
+| API health (AWS EC2) | https://203-0-113-10.sslip.io/api/health |
+| Web (bản phụ Vercel) | https://brewlite-assignment2-ten.vercel.app |
+| API health (bản phụ Render) | https://brewlite-api-1rs6.onrender.com/health |
 | Lần chạy CD thành công | https://github.com/DuyPhong-181006/BrewLite-Assignment2-/actions/runs/44087825578 |
 | Release v1.0.0 | *(link Releases)* |
 | Video demo luồng end-to-end | *(link video)* |

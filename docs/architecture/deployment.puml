@@ -1,8 +1,9 @@
 @startuml deployment
-' UML deployment diagram – môi trường production thực tế (Task 3.2) – TV1 Đào Duy Phong
-' Nền tảng: Vercel (web) + Render (API, PostgreSQL) + GitHub Actions/GHCR (CI/CD). Xem ADR-006.
+' UML deployment diagram – môi trường production thực tế (Task 3.2) – TV1 Đào Duy Phong, TV6 Nguyễn Tấn Sự
+' Production chính: AWS EC2 (Ubuntu + Docker Compose + Caddy) – ADR-007. Bản phụ: Vercel + Render – ADR-006.
 skinparam shadowing false
 skinparam defaultFontName "Arial"
+skinparam defaultFontSize 13
 skinparam nodeBorderColor #2F6B4F
 skinparam nodeBackgroundColor #FFFFFF
 skinparam artifactBorderColor #A86B12
@@ -10,58 +11,59 @@ skinparam databaseBorderColor #2F6B4F
 skinparam ArrowColor #2F6B4F
 skinparam rectangleBorderColor #8AA9A0
 skinparam rectangleBorderStyle dashed
+left to right direction
 
-rectangle "LOCAL – máy lập trình viên" as LOCAL {
+rectangle "LOCAL – máy lập trình viên / quản trị" as LOCAL {
   node "Laptop (Docker Desktop)" as DEV {
-    artifact "docker-compose.yml\n(db + api + web)" as COMPOSE
-    artifact "Git repo" as GIT
+    artifact "Git repo\ndocker-compose.yml" as GIT
+    artifact "brewlite-key.pem\n(key pair, không commit)" as PEM
   }
 }
 
 rectangle "CI – GitHub" as CI {
-  node "GitHub Repository\n(main được bảo vệ, PR bắt buộc)" as GH
+  node "GitHub Repository\n(PR bắt buộc)" as GH
   node "GitHub Actions runner\n(ubuntu-latest)" as RUNNER {
-    artifact "ci.yml\nInstall → Lint → Unit Test → Build\n+ integration test" as CIWF
-    artifact "e2e.yml (Playwright)" as E2EWF
-    artifact "cd.yml / rollback.yml" as CDWF
+    artifact "ci.yml · e2e.yml" as CIWF
+    artifact "cd.yml · rollback.yml\n(deploy-ec2: SSH)" as CDWF
   }
-  node "GitHub Container Registry\nghcr.io/<owner>/brewlite-api" as GHCR {
-    artifact "image :<commit-sha>\nimage :latest" as IMG
+  node "GitHub Container Registry" as GHCR {
+    artifact "brewlite-api:<sha>\nbrewlite-web:<sha>" as IMG
   }
-  database "GitHub Secrets\nRENDER_DEPLOY_HOOK_URL\nVERCEL_TOKEN / ORG_ID / PROJECT_ID" as SECRETS
+  database "GitHub Secrets / Variables\nEC2_SSH_KEY · EC2_HOST · EC2_URL" as SECRETS
 }
 
-rectangle "PRODUCTION" as PROD {
-  node "Thiết bị người dùng\n(điện thoại / laptop)" as DEVICE {
-    node "Trình duyệt / PWA\n(manifest, cài lên màn hình chính)" as BROWSER
+rectangle "PRODUCTION – AWS, region Singapore" as PROD {
+  node "Thiết bị người dùng" as DEVICE {
+    node "Trình duyệt / PWA" as BROWSER
   }
-  node "Vercel Edge Network (CDN)\nbrewlite.vercel.app" as VERCEL {
-    artifact "Next.js 16 – apps/web\n(trang tĩnh + JS, NEXT_PUBLIC_API_URL)" as WEB
-  }
-  node "Render – Web Service (Docker)\nbrewlite-api.onrender.com, Singapore" as RENDER {
-    node "Container node:22-alpine\ncổng 3001 (nội bộ)" as CONTAINER {
-      artifact "NestJS API – apps/api\nGET /health, log stdout" as API
-      artifact "prisma migrate deploy\n(chạy khi khởi động)" as MIG
+  node "EC2 t3.micro – Ubuntu 24.04\nIP công khai (Elastic IP)\nSecurity Group: 22, 80, 443" as EC2 {
+    artifact "~~/brewlite (git clone)\ndocker-compose.prod.yml\ndeploy/deploy.sh · .env" as REPO
+    node "Docker Engine (Docker Compose)" as DOCKER {
+      node "proxy: Caddy 2\n:80 / :443, HTTPS Let's Encrypt\n<ip>.sslip.io" as CADDY
+      node "web: Next.js 16\n:3000 (nội bộ)" as WEB
+      node "api: NestJS\n:3001 (nội bộ)\nGET /health, log stdout\nprisma migrate deploy" as API
+      database "db: PostgreSQL 16\n:5432 (nội bộ)\nvolume pgdata" as DB
     }
-    database "Environment (Render)\nDATABASE_URL, JWT_SECRET,\nFRONTEND_URL, RUN_SEED" as ENV
   }
-  node "Render PostgreSQL 16\n(Singapore, private network)" as PG {
-    database "brewlite\n(persistent disk)" as DB
-  }
+}
+
+rectangle "BẢN PHỤ (ADR-006)" as BACKUP {
+  node "Vercel (web)" as VERCEL
+  node "Render (API + PostgreSQL)" as RENDER
 }
 
 DEV --> GH : git push / Pull Request\n(HTTPS 443)
+DEV ..> EC2 : SSH 22 bằng key pair\n(cài đặt lần đầu)
 GH --> RUNNER : kích hoạt workflow
 CDWF --> GHCR : docker push\n(HTTPS 443)
 CDWF ..> SECRETS : đọc secret
-CDWF --> RENDER : gọi Deploy Hook ?imgURL=…:<sha>\n(HTTPS 443)
-CDWF --> VERCEL : vercel deploy --prebuilt\n(HTTPS 443)
-CDWF --> API : smoke test GET /health\n(HTTPS 443)
-RENDER --> GHCR : kéo image theo tag SHA
+CDWF --> EC2 : SSH 22: deploy.sh <sha>\nsmoke test /api/health
+CDWF ..> BACKUP : Deploy Hook / vercel deploy
+DOCKER --> GHCR : docker pull image :<sha>
+REPO ..> DOCKER : docker compose up -d
 
-BROWSER --> VERCEL : HTTPS 443\ntải giao diện
-BROWSER --> RENDER : HTTPS 443 (REST + JWT)\nCORS chỉ cho domain Vercel
-API --> DB : TCP 5432, Internal URL\n(không mở ra Internet)
-ENV ..> API : biến môi trường
-RENDER ..> API : health check GET /health\nlog -> Render Logs
+BROWSER --> CADDY : HTTPS 443
+CADDY --> WEB : /
+CADDY --> API : /api/*
+API --> DB : TCP 5432\n(không mở ra Internet)
 @enduml

@@ -60,9 +60,10 @@
 
 | Thành phần kiến trúc | Mã nguồn | Node trong Deploy-01 |
 |---|---|---|
-| Web Next.js/PWA | `apps/web` | Vercel Edge Network |
-| API NestJS (module theo domain) | `apps/api/src/*` | Render Web Service – container |
+| Cổng vào, HTTPS | `deploy/Caddyfile`, `docker-compose.prod.yml` | AWS EC2 – container Caddy |
+| Web Next.js/PWA | `apps/web` | AWS EC2 – container web (bản phụ: Vercel) |
+| API NestJS (module theo domain) | `apps/api/src/*` | AWS EC2 – container API (bản phụ: Render Web Service) |
 | Migration | `apps/api/prisma/migrations` | `prisma migrate deploy` trong container |
-| PostgreSQL | `apps/api/prisma/schema.prisma` | Render PostgreSQL |
+| PostgreSQL | `apps/api/prisma/schema.prisma` | AWS EC2 – container PostgreSQL (bản phụ: Render PostgreSQL) |
 | Cổng thanh toán giả lập | `apps/api/src/payments/mock-payment.gateway.ts` | trong container API |
-| CI/CD | `.github/workflows/` | GitHub Actions, GHCR |
+| CI/CD | `.github/workflows/`, `deploy/deploy.sh` | GitHub Actions, GHCR, SSH vào EC2 |
