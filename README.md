@@ -9,9 +9,9 @@ Xem menu → Chọn size, topping → Giỏ hàng → Đặt đơn → Thanh to�
 
 | | URL |
 |---|---|
-| **Web (production)** | https://brewlite.vercel.app *(TV1 cập nhật đúng URL sau khi deploy)* |
-| **API** | https://brewlite-api.onrender.com |
-| **Health check** | https://brewlite-api.onrender.com/health |
+| **Web (production)** | https://brew-lite-assignment2-ten.vercel.app |
+| **API** | https://brewlite-api-1rs6.onrender.com |
+| **Health check** | https://brewlite-api-1rs6.onrender.com/health |
 | Tài khoản demo | `demo@brewlite.vn` / `123456` · Mã giảm giá: `WELCOME10`, `BREW20` |
 | Màn quầy pha chế | `/staff` – mã nhân viên local: `barista-demo-key` (production: hỏi nhóm) |
 

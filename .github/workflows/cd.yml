@@ -3,7 +3,7 @@
 #
 # Cần cấu hình trước trong GitHub: Settings -> Secrets and variables -> Actions (xem docs/deployment.md)
 #   Secrets:   RENDER_DEPLOY_HOOK_URL, VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
-#   Variables: API_URL (vd https://brewlite-api.onrender.com), WEB_URL (vd https://brewlite.vercel.app)
+#   Variables: API_URL (vd https://brewlite-api-1rs6.onrender.com), WEB_URL (vd https://brew-lite-assignment2-ten.vercel.app)
 name: CD
 
 on:

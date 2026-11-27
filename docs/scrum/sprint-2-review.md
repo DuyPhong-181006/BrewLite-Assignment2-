@@ -23,7 +23,7 @@
 
 | | Link |
 |---|---|
-| Web | https://brewlite-assignment2-ten.vercel.app |
+| Web | https://brew-lite-assignment2-ten.vercel.app |
 | API health | https://brewlite-api-1rs6.onrender.com/health |
 | Lần chạy CD thành công | https://github.com/DuyPhong-181006/BrewLite-Assignment2-/actions/runs/44087825578 |
 | Release v1.0.0 | *(link Releases)* |
