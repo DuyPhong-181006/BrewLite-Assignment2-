@@ -1,6 +1,6 @@
 # ADR-006: Triển khai trên Vercel (web) + Render (API, PostgreSQL), image lưu ở GHCR
 
-- **Trạng thái:** Thay thế một phần bởi [ADR-007](007-aws-ec2.md) – production chính chuyển sang AWS EC2; Render + Vercel giữ làm bản phụ
+- **Trạng thái:** Chấp nhận
 - **Ngày:** 17/11/2026
 - **Người đề xuất:** TV1 – Đào Duy Phong
 

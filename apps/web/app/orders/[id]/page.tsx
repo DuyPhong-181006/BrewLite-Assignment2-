@@ -3,12 +3,10 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState, useSyncExternalStore } from 'react';
-import CancelOrderButton, { CUSTOMER_CANCELLABLE } from '@/components/CancelOrderButton';
 import { API_URL, authHeader, useAuth } from '@/store/auth';
 
 // TV5 – Màn (5) Xác nhận đơn (Task 9, wireframe Mục 7): mã đơn, trạng thái, "Về trang chủ"
 // Dữ liệu: GET /orders/:id (API của TV4) – cần đăng nhập
-// TV4: đơn chưa trả tiền (PENDING / PAYMENT_FAILED) có nút "Hủy đơn" – PATCH /orders/:id/cancel
 
 type OrderItem = { id: number; productName: string; size: string; toppings: string[]; qty: number; lineTotal: number };
 type Order = {
@@ -227,17 +225,6 @@ function OrderConfirmContent() {
             <span className="text-xl font-bold tabular-nums">{vnd(order.total)}</span>
           </p>
         </div>
-
-        {CUSTOMER_CANCELLABLE.includes(order.status) && (
-          <CancelOrderButton
-            orderId={order.id}
-            onUnauthorized={() => {
-              useAuth.getState().logout();
-              router.replace('/login');
-            }}
-            onCancelled={(o) => setOrder((prev) => (prev ? { ...prev, status: o.status } : prev))}
-          />
-        )}
 
         <div className="mt-6 grid gap-2 sm:grid-cols-2">
           <Link href="/orders" className="rounded-xl border border-line py-3 text-center font-medium hover:border-leaf">

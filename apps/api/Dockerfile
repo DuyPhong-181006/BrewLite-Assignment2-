@@ -1,4 +1,4 @@
-# TV1 – Image của NestJS API. CD build image này, gắn tag = commit SHA, đẩy lên GHCR; server AWS EC2 (và Render) kéo về chạy.
+# TV1 – Image của NestJS API. CI build image này, gắn tag = commit SHA, đẩy lên GHCR, Render kéo về chạy.
 # Local: docker compose up --build
 FROM node:22-alpine
 

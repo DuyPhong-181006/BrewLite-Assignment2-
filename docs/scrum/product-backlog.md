@@ -30,6 +30,5 @@
 | S2-7 | Màn xác nhận (tự cập nhật trạng thái) + lịch sử đơn; test E2E Playwright + workflow E2E | FR-07 | TV5 | 3 | 8 |
 | S2-8 | CD: image SHA → GHCR → Render/Vercel → smoke test → rollback; README; release v1.0.0 | NFR-04, NFR-06 | TV1 | 5 | 9 |
 | S2-9 | Ma trận truy vết, Sprint Review | – | TV2 | 2 | 10 |
-| S2-11 | Production chính trên AWS EC2 theo hướng dẫn trên lớp: Docker Compose + Caddy (HTTPS), CD deploy qua SSH, rollback; tài liệu, ADR-007, deployment diagram | NFR-04, NFR-06 | TV1 (hạ tầng), TV6 (tài liệu) | 5 | 11 |
 
 Ước lượng theo story point (1, 2, 3, 5).

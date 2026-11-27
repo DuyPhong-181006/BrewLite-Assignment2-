@@ -28,7 +28,3 @@ Thumbs.db
 # Playwright
 test-results/
 playwright-report/
-
-# Server AWS EC2: deploy/deploy.sh ghi lại commit đang chạy
-.deployed_tag
-.previous_tag
